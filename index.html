@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<!--
+  Showwork — the board.
+
+  THE WHOLE PAGE IN FOUR STEPS:
+    1. You write on the canvas. Pen and mouse draw; fingers pan, never draw.
+    2. "Check my work" sends a picture of the board to our own server.
+    3. The server reads it back to you. YOU fix the reading if it got it wrong.
+    4. Only then does it mark the FIRST mistake — written onto the board,
+       stroke by stroke, in its own reserved colour.
+
+  Step 3 is the point of the whole thing. A tutor that confidently misreads
+  your work and corrects you for a mistake you never made is worse than no
+  tutor at all. So it never tutors on a reading you haven't confirmed.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Showwork</title>
+<style>
+  /* ============================================================
+     THE PALETTE — muted, paper-like. The AI's amber is reserved:
+     it is never offered in the student's pen colours, so its marks
+     can never be mistaken for theirs.
+     ============================================================ */
+  :root {
+    --paper:   #fbfaf7;
+    --line:    #e7e3da;
+    --ui:      #ffffff;
+    --edge:    #d9d4c9;
+    --text:    #2e2c28;
+    --muted:   #7a746a;
+    --ai-ink:  #c2410c;   /* RESERVED. Never a student colour. */
+    --accent:  #3f5d52;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--paper); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+    /* fingers must never scroll the page — the canvas handles them */
+    overscroll-behavior: none; touch-action: none;
+    -webkit-user-select: none; user-select: none;
+  }
+
+  /* ---- the board fills everything; the UI floats over it ---- */
+  #board { position: fixed; inset: 0; display: block; cursor: crosshair; touch-action: none; }
+
+  /* ============================================================
+     THE TOOLBAR — one row, no modes to learn. Pick up a pen, write.
+     ============================================================ */
+  #bar {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    padding: 9px 14px; border-radius: 12px;
+    background: var(--ui); border: 1px solid var(--edge);
+    box-shadow: 0 2px 14px rgba(0,0,0,.07);
+    z-index: 10; max-width: calc(100vw - 24px);
+  }
+
+  .pens { display: flex; gap: 7px; }
+  .pen {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid transparent; cursor: pointer; padding: 0;
+  }
+  .pen[aria-pressed="true"] { border-color: var(--accent); transform: scale(1.12); }
+
+  .sep { width: 1px; height: 24px; background: var(--edge); }
+
+  button.act {
+    border: 1px solid var(--edge); background: var(--ui); color: var(--text);
+    border-radius: 8px; padding: 7px 13px; cursor: pointer; font-size: 14px;
+    font-family: inherit;
+  }
+  button.act:hover:not(:disabled) { background: #f4f1ea; }
+  button.act:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
+  }
+  button.primary:hover:not(:disabled) { background: #354f45; }
+
+  /* ============================================================
+     THE READ-BACK PANEL — "here is what I read."
+     The student owns this text. They can fix any of it.
+     ============================================================ */
+  #panel {
+    position: fixed; right: 16px; top: 76px; width: min(390px, calc(100vw - 32px));
+    max-height: calc(100vh - 100px); overflow: auto;
+    background: var(--ui); border: 1px solid var(--edge); border-radius: 12px;
+    box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 10;
+    display: none;
+  }
+  #panel.on { display: block; }
+  #panel h2 { margin: 0 0 4px; font-size: 15px; }
+  #panel .why { margin: 0 0 11px; font-size: 13px; color: var(--muted); }
+  #read {
+    width: 100%; min-height: 190px; resize: vertical;
+    font: 13px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--text); background: var(--paper);
+    border: 1px solid var(--edge); border-radius: 8px; padding: 10px;
+    -webkit-user-select: text; user-select: text;
+  }
+  #panel .row { display: flex; gap: 8px; margin-top: 11px; }
+  #panel .row button { flex: 1; }
+
+  #status {
+    position: fixed; left: 16px; bottom: 14px; z-index: 10;
+    font-size: 13px; color: var(--muted); max-width: 60vw;
+  }
+  #status.bad { color: #a33; }
+
+  #hint {
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    z-index: 5; font-size: 12.5px; color: var(--muted); pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="board"></canvas>
+
+<div id="bar">
+  <div class="pens" id="pens"></div>
+  <div class="sep"></div>
+  <button class="act" id="undo" title="Undo">Undo</button>
+  <button class="act" id="clear" title="Clear the board">Clear</button>
+  <div class="sep"></div>
+  <button class="act primary" id="check">Check my work</button>
+</div>
+
+<div id="panel">
+  <h2>Here's what I read</h2>
+  <p class="why">Fix anything I got wrong before I say a word about it. Where I wasn't sure, my other guess is in [brackets] — keep the right one.</p>
+  <textarea id="read" spellcheck="false"></textarea>
+  <div class="row">
+    <button class="act" id="cancel">Cancel</button>
+    <button class="act primary" id="confirm">That's right — check it</button>
+  </div>
+</div>
+
+<div id="status"></div>
+<div id="hint">Pen or mouse draws · finger or scroll pans</div>
+
+<script>
+/* ============================================================
+   THE STATE — everything the board knows.
+
+   strokes[] is the memory. Undo pops it, clear empties it, and
+   every redraw is just "walk the list and draw it again". The
+   AI's writing lives in its OWN list so it can never be undone
+   by the student's undo, and never blends into their work.
+   ============================================================ */
+const PENS   = ['#2e2c28', '#1d4ed8', '#166534', '#7c2d12'];  /* no amber here */
+const AI_INK = '#c2410c';                                      /* reserved */
+
+const strokes = [];      /* [{color, width, pts:[{x,y}]}]  — the student's */
+const aiMarks = [];      /* [{x, y, text, shown}]          — the AI's */
+
+let pen = PENS[0];
+let drawing = null;      /* the stroke in progress */
+let pan = {x: 0, y: 0};  /* how far the board has been dragged */
+let panFrom = null;      /* where a finger-drag started */
+
+const cv  = document.getElementById('board');
+const ctx = cv.getContext('2d');
+
+/* ============================================================
+   fit — size the canvas to the window at real device resolution.
+   Without the devicePixelRatio scaling, handwriting looks furry
+   on a retina screen, and the vision model has to read furry ink.
+   ============================================================ */
+function fit() {
+  const r = window.devicePixelRatio || 1;
+  cv.width  = Math.floor(innerWidth  * r);
+  cv.height = Math.floor(innerHeight * r);
+  cv.style.width  = innerWidth  + 'px';
+  cv.style.height = innerHeight + 'px';
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+  redraw();
+}
+addEventListener('resize', fit);
+
+/* ============================================================
+   redraw — the whole board, from the lists, every time.
+
+   Simple beats clever here: there is no partial repainting to get
+   wrong, and at handwriting scale it is far faster than it needs
+   to be.
+   ============================================================ */
+function redraw() {
+  const r = window.devicePixelRatio || 1;
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+
+  /* ---- the ruled paper, so it reads as a place to write ---- */
+  ctx.fillStyle = getCSS('--paper');
+  ctx.fillRect(0, 0, innerWidth, innerHeight);
+  ctx.strokeStyle = getCSS('--line');
+  ctx.lineWidth = 1;
+  const GAP = 38;
+  for (let y = (pan.y % GAP + GAP) % GAP; y < innerHeight; y += GAP) {
+    ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(innerWidth, y + .5); ctx.stroke();
+  }
+
+  /* ---- everything below this moves with the pan ---- */
+  ctx.save();
+  ctx.translate(pan.x, pan.y);
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const s of strokes) drawStroke(s);
+  if (drawing) drawStroke(drawing);
+
+  /* ---- the AI's ink: its own colour, its own layer, and only ---- */
+  /* ---- as many characters as the animation has revealed      ---- */
+  ctx.fillStyle = AI_INK;
+  ctx.font = '19px "Bradley Hand", "Segoe Script", "Comic Sans MS", cursive';
+  ctx.textBaseline = 'top';
+  for (const m of aiMarks) {
+    const lines = m.text.slice(0, m.shown).split('\n');
+    lines.forEach((ln, i) => ctx.fillText(ln, m.x, m.y + i * 26));
+  }
+
+  ctx.restore();
+}
+
+function drawStroke(s) {
+  if (s.pts.length < 2) return;
+  ctx.strokeStyle = s.color;
+  ctx.lineWidth = s.width;
+  ctx.beginPath();
+  ctx.moveTo(s.pts[0].x, s.pts[0].y);
+  for (let i = 1; i < s.pts.length; i++) ctx.lineTo(s.pts[i].x, s.pts[i].y);
+  ctx.stroke();
+}
+
+function getCSS(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/* ============================================================
+   INPUT — the rule that makes this feel like paper:
+
+     pen or mouse  -> draw
+     finger        -> pan, never draw
+
+   That is real palm rejection. You can rest your hand on the
+   screen while you write, the way you do on paper.
+   ============================================================ */
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+
+  if (e.pointerType === 'touch') {           /* a finger: move the paper */
+    panFrom = {x: e.clientX - pan.x, y: e.clientY - pan.y};
+    return;
+  }
+
+  /* pen pressure gives a live line width; a mouse reports 0, so fall back */
+  drawing = {color: pen, width: penWidth(e), pts: [pt(e)]};
+});
+
+cv.addEventListener('pointermove', e => {
+  if (panFrom && e.pointerType === 'touch') {
+    pan = {x: e.clientX - panFrom.x, y: e.clientY - panFrom.y};
+    return redraw();
+  }
+  if (!drawing) return;
+  drawing.pts.push(pt(e));
+  redraw();
+});
+
+function done(e) {
+  if (e.pointerType === 'touch') { panFrom = null; return; }
+  if (drawing && drawing.pts.length > 1) strokes.push(drawing);
+  drawing = null;
+  redraw();
+}
+cv.addEventListener('pointerup', done);
+cv.addEventListener('pointercancel', done);
+cv.addEventListener('pointerleave', done);
+
+/* a mouse can't pan by dragging (dragging draws), so the wheel / trackpad does */
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  pan = {x: pan.x - e.deltaX, y: pan.y - e.deltaY};
+  redraw();
+}, {passive: false});
+
+/* the point, in board space — so pan doesn't smear the ink */
+const pt = e => ({x: e.clientX - pan.x, y: e.clientY - pan.y});
+const penWidth = e => (e.pressure > 0 && e.pointerType === 'pen')
+  ? 1.2 + e.pressure * 3.4 : 2.4;
+
+/* ============================================================
+   THE TOOLBAR
+   ============================================================ */
+const pensEl = document.getElementById('pens');
+PENS.forEach((c, i) => {
+  const b = document.createElement('button');
+  b.className = 'pen';
+  b.style.background = c;
+  b.setAttribute('aria-pressed', i === 0);
+  b.setAttribute('aria-label', 'Pen colour ' + (i + 1));
+  b.onclick = () => {
+    pen = c;
+    [...pensEl.children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  };
+  pensEl.appendChild(b);
+});
+
+document.getElementById('undo').onclick = () => { strokes.pop(); redraw(); };
+document.getElementById('clear').onclick = () => {
+  strokes.length = 0; aiMarks.length = 0; redraw(); say('');
+};
+
+/* ============================================================
+   SNAPSHOT — a clean picture of the work for the model.
+
+   Deliberately NOT the visible canvas: the ruled lines and the
+   AI's own previous marks would both end up in the image, and the
+   model would try to read them as part of the student's work.
+   White paper, student ink only.
+   ============================================================ */
+function snapshot() {
+  const box = bounds();
+  if (!box) return null;
+
+  const PAD = 40, SCALE = 2;          /* 2x: the model reads crisp ink, not furry ink */
+  const w = box.maxX - box.minX + PAD * 2;
+  const h = box.maxY - box.minY + PAD * 2;
+
+  const off = document.createElement('canvas');
+  off.width = w * SCALE; off.height = h * SCALE;
+  const o = off.getContext('2d');
+  o.fillStyle = '#ffffff';
+  o.fillRect(0, 0, off.width, off.height);
+  o.scale(SCALE, SCALE);
+  o.translate(PAD - box.minX, PAD - box.minY);
+  o.lineCap = 'round'; o.lineJoin = 'round';
+
+  for (const s of strokes) {
+    if (s.pts.length < 2) continue;
+    o.strokeStyle = s.color; o.lineWidth = s.width;
+    o.beginPath(); o.moveTo(s.pts[0].x, s.pts[0].y);
+    for (let i = 1; i < s.pts.length; i++) o.lineTo(s.pts[i].x, s.pts[i].y);
+    o.stroke();
+  }
+  return {url: off.toDataURL('image/png'), box};
+}
+
+function bounds() {
+  if (!strokes.length) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const s of strokes) for (const p of s.pts) {
+    if (p.x < minX) minX = p.x;  if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;  if (p.y > maxY) maxY = p.y;
+  }
+  return {minX, minY, maxX, maxY};
+}
+
+/* ============================================================
+   THE LOOP — check -> read back -> confirm -> first mistake
+   ============================================================ */
+const panel   = document.getElementById('panel');
+const readEl  = document.getElementById('read');
+const checkEl = document.getElementById('check');
+let shot = null;                       /* the picture both calls share */
+
+checkEl.onclick = async () => {
+  shot = snapshot();
+  if (!shot) return say('Write something first.', true);
+
+  busy(true, 'Reading your work…');
+  try {
+    const r = await post('/transcribe', {image: shot.url});
+    readEl.value = r.transcription;
+    panel.classList.add('on');
+    readEl.focus();
+    say(`${r.checks_left} checks left`);
+  } catch (e) { say(e.message, true); }
+  busy(false);
+};
+
+document.getElementById('cancel').onclick = () => panel.classList.remove('on');
+
+document.getElementById('confirm').onclick = async () => {
+  panel.classList.remove('on');
+  busy(true, 'Looking for the first thing to fix…');
+  try {
+    const v = await post('/check', {image: shot.url, work: readEl.value});
+    write(v.all_correct
+      ? "Nothing wrong here.\nThis is all correct."
+      : `${v.problem}\n${v.nudge}`);
+    say(v.all_correct ? 'All correct.' : `${v.checks_left} checks left`);
+  } catch (e) { say(e.message, true); }
+  busy(false);
+};
+
+async function post(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({message: 'no answer from server'}));
+  if (!res.ok) throw new Error(data.message || 'something went wrong');
+  return data;
+}
+
+/* ============================================================
+   write — the AI's answer, appearing on the board the way a
+   person writes it: one character at a time, below your work,
+   in ink that is only ever its own.
+   ============================================================ */
+function write(text) {
+  const box = bounds();
+  const mark = {
+    x: box ? box.minX : 60,
+    y: box ? box.maxY + 34 : 120,
+    text: wrap(text, 46),
+    shown: 0,
+  };
+  aiMarks.push(mark);
+
+  const total = mark.text.length;
+  const step = () => {
+    mark.shown = Math.min(total, mark.shown + 2);
+    redraw();
+    if (mark.shown < total) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function wrap(text, cols) {
+  return text.split('\n').map(para => {
+    const out = [];
+    let line = '';
+    for (const word of para.split(' ')) {
+      if ((line + ' ' + word).trim().length > cols) { out.push(line.trim()); line = word; }
+      else line += ' ' + word;
+    }
+    if (line.trim()) out.push(line.trim());
+    return out.join('\n');
+  }).join('\n');
+}
+
+/* ---- small helpers: say something, or show we're working ---- */
+const statusEl = document.getElementById('status');
+function say(msg, bad) {
+  statusEl.textContent = msg;
+  statusEl.className = bad ? 'bad' : '';
+}
+function busy(on, msg) {
+  checkEl.disabled = on;
+  checkEl.textContent = on ? (msg || 'Working…') : 'Check my work';
+}
+
+fit();
+</script>
+</body>
+</html>
