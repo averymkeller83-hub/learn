@@ -168,7 +168,10 @@
   #meta input:focus { background: var(--ui); outline: 1px solid var(--edge); }
   #title { font-size: 24px; font-weight: 700; line-height: 1.2; }
   #pageDate { font-size: 12.5px; color: var(--muted); padding-left: 0; }
-  #topic { font-size: 13.5px; color: var(--muted); }
+  #meta .line2 { display: flex; gap: 8px; align-items: center; pointer-events: auto; }
+  #topic { font-size: 13.5px; color: var(--muted); flex: 1; min-width: 0; }
+  #subjectSel { font: inherit; font-size: 12.5px; padding: 3px 6px; border: 1px solid var(--edge); border-radius: 7px;
+                background: var(--ui); color: var(--text); flex: none; max-width: 140px; }
   #meta input::placeholder { color: var(--muted); font-weight: 400; }
 
   /* ============================================================
@@ -553,6 +556,7 @@
      The tutor asks what you already know, puts a plan on the board, and teaches it one step at a time.</p>
   <input id="teachTopic" placeholder="e.g. how to tell time on an analog clock" autocomplete="off">
   <div class="row" style="margin-top:8px">
+    <select id="teachSubject"></select>
     <select id="teachLevel"><option value="kid">I'm a kid</option><option value="teen">High school</option><option value="college" selected>College</option><option value="adult">Adult learner</option></select>
     <button class="act primary" id="teachGo">Start the lesson</button>
   </div>
@@ -609,7 +613,10 @@
 <div id="meta">
   <input id="title" placeholder="Untitled page" autocomplete="off" spellcheck="false">
   <div id="pageDate"></div>
-  <input id="topic" placeholder="What are you working on? e.g. Calc — chain rule · Spanish — preterite · Bio — cell division" autocomplete="off" spellcheck="false">
+  <div class="line2">
+    <select id="subjectSel" title="Subject — the tutor teaches it the way that subject is taught"></select>
+    <input id="topic" placeholder="What are you working on? e.g. chain rule · preterite · cell division" autocomplete="off" spellcheck="false">
+  </div>
 </div>
 
 <aside id="side">
@@ -1626,7 +1633,7 @@ async function runCheck() {
   if (examOpen()) return runGrade();
   busy(true, 'Looking for the first thing to fix…');
   try {
-    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600)), calc: calcOn() ? 'on' : 'off'});
+    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), subject: subject(), sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600)), calc: calcOn() ? 'on' : 'off'});
     if (v.all_correct) {
       write("✓");
       tutorSays("All correct — nothing to fix on this page.");
@@ -1649,7 +1656,7 @@ async function runCheck() {
 async function runGrade() {
   busy(true, 'Grading…');
   try {
-    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), mode: 'grade', n: current.exam.n, sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600)), calc: calcOn() ? 'on' : 'off'});
+    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), subject: subject(), mode: 'grade', n: current.exam.n, sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600)), calc: calcOn() ? 'on' : 'off'});
     const results = Array.isArray(v.results) ? v.results : [];
     for (const r of results) if (!r.correct && Array.isArray(r.wrong_box) && r.wrong_box.length === 4) strike(r.wrong_box);
     const right = results.filter(r => r.correct).length;
@@ -1701,7 +1708,12 @@ let PROMPTS = null;                                  /* same prompts.json the se
 const userKey = () => { try { return localStorage.getItem('showwork.key') || ''; } catch { return ''; } };
 
 async function loadPrompts() {
-  try { PROMPTS = await (await fetch('/prompts.json')).json(); } catch { PROMPTS = null; }
+  /* Two separate try blocks on purpose: a render error must NOT throw away the
+     prompts (that quietly disabled bring-your-own-key and left the subject list
+     at its one-item fallback). */
+  /* no-store: a cached prompts.json from an older deploy silently drops new subjects */
+  try { PROMPTS = await (await fetch('/prompts.json', {cache: 'no-store'})).json(); } catch { PROMPTS = null; return; }
+  try { fillSubjects(); } catch (e) { console.warn('subject list not ready yet', e); }
 }
 
 async function api(path, body) {
@@ -1713,6 +1725,8 @@ async function api(path, body) {
   const src = (body.sources || '').trim().slice(0, 9000);
   if (src) note += PROMPTS.sources_note.replace('{sources}', src);
   if (body.calc === 'on' || body.calc === 'off') note += PROMPTS[body.calc === 'on' ? 'calc_on_note' : 'calc_off_note'];
+  const subj = (PROMPTS.subjects || {})[body.subject || ''];
+  if (subj) note += PROMPTS.subject_note.replace('{subject}', subj.prompt);
   if ((body.level || '').trim()) note += PROMPTS.level_note.replace('{level}', body.level.trim().slice(0, 40));
   if ((body.learner || '').trim()) note += PROMPTS.learner_note.replace('{learner}', body.learner.trim().slice(0, 3000));
 
@@ -1725,7 +1739,7 @@ async function api(path, body) {
       ? PROMPTS.grade.replace('{work}', body.work).replace(/\{n\}/g, String(body.n || 5))
       : PROMPTS.check.replace('{work}', body.work);
     const raw = await gemini(key, {contents: [{parts: [{text: note + prompt}, imgPart(body.image)]}], generationConfig: JSON_MODE});
-    let v; try { v = JSON.parse(stripFence(raw)); } catch { v = {line: '', problem: raw.trim(), nudge: '', all_correct: false}; }
+    const v = looseJson(raw) || {line: '', problem: raw.trim(), nudge: '', all_correct: false};
     v.checks_left = null;
     return v;
   }
@@ -1737,7 +1751,8 @@ async function api(path, body) {
   contents.push({role: 'user', parts});
   const raw = await gemini(key, {system_instruction: {parts: [{text: note + PROMPTS.chat}]}, contents, generationConfig: JSON_MODE});
   let say = raw.trim(), board = '', remember = '';
-  try { const o = JSON.parse(stripFence(raw)); say = String(o.say || ''); board = o.board ?? ''; remember = String(o.remember || '').slice(0, 200); } catch {}
+  const o = looseJson(raw);
+  if (o) { say = String(o.say || ''); board = o.board ?? ''; remember = String(o.remember || '').slice(0, 200); }
   return {say, board, remember, checks_left: null};
 }
 
@@ -1762,9 +1777,28 @@ const imgPart = url => {
   return {inline_data: {mime_type: head.slice(5).split(';')[0] || 'image/png', data: b64}};
 };
 function stripFence(text) {                          /* the model likes ```json fences */
-  let t = text.trim();
+  let t = String(text).trim();
   if (t.startsWith('```')) { t = t.includes('\n') ? t.slice(t.indexOf('\n') + 1) : t; t = t.slice(0, t.lastIndexOf('```')); }
   return t.trim();
+}
+
+/* ============================================================
+   looseJson — the model's JSON, parsed like a person would read it.
+   Even in JSON mode a reply occasionally carries a fence, a trailing
+   stray brace, or a sentence after the object. Try the strict parse,
+   then the widest {...} in the text, then give up honestly. Raw JSON
+   must never reach the chat as if it were the tutor talking.
+   ============================================================ */
+function looseJson(text) {
+  const t = stripFence(text);
+  try { return JSON.parse(t); } catch {}
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) {
+    for (let end = b; end > a; end = t.lastIndexOf('}', end - 1)) {
+      try { return JSON.parse(t.slice(a, end + 1)); } catch {}
+    }
+  }
+  return null;
 }
 
 /* ---- the settings panel ---- */
@@ -2147,7 +2181,7 @@ document.getElementById('chatform').addEventListener('submit', async e => {
     const s = snapshot();                                /* null on an empty page — that's fine */
     const r = await api('/chat', {
       image: s ? s.url : null,
-      context: topic(),
+      context: topic(), subject: subject(),
       sources: sourcesFor(topic() + ' ' + text + ' ' + chat.slice(-3).map(m => m.text).join(' ')),
       calc: calcOn() ? 'on' : 'off',
       level: learnerLevel(), learner: learnerText(),
@@ -2155,7 +2189,9 @@ document.getElementById('chatform').addEventListener('submit', async e => {
     });
     if (r.remember) rememberAboutLearner(r.remember);
     if (typeof r.say === 'string' && /^\s*(```|\{)/.test(r.say)) {          /* a raw JSON reply that slipped through */
-      try { const o = JSON.parse(stripFence(r.say)); r.say = String(o.say || ''); r.board = o.board ?? r.board; } catch {}
+      const o = looseJson(r.say);
+      if (o) { r.say = String(o.say || ''); r.board = o.board ?? r.board; }
+      else r.say = r.say.replace(/^[\s\S]*?"say"\s*:\s*"/, '').replace(/",?[\s\S]*$/, '') || 'Sorry — say that again?';
     }
     const shown = renderBoard(r.board);
     chat.push({role: 'ai', text: (r.say || '').trim() || '…', board: shown});
@@ -2313,6 +2349,7 @@ function serialize() {
     aiLines: aiLines.map(l => ({x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, shown: 1})),
     chat: chat.map(m => ({role: m.role, text: m.text, board: !!m.board})),
     exam: current.exam || null,
+    subject: current.subject || subject(),
     paper: {...paper},
     created: current.created || Date.now(),
     pdf: pdfBytes,
@@ -2345,7 +2382,9 @@ async function openPage(rec, {quiet = false} = {}) {
 
   current = sheets.find(s => s.id === rec.id) || rec;
   current.exam = rec.exam || null;
+  current.subject = rec.subject || null;
   current.created = rec.created || rec.updated;
+  if (PROMPTS) { subjectSel.value = subject(); teachSubject.value = subject(); }
   paper = rec.paper && PAPER_TYPES[rec.paper.rule] ? {color: rec.paper.color || '#fbfaf7', rule: rec.paper.rule} : defaultPaper();
   if (typeof markPaper === 'function') markPaper();
   if (editing) commitText();
@@ -2647,16 +2686,39 @@ async function onenotePageToRecord(html, notebook, section, pg) {
   if (!rec.texts.length && !rec.pics.length) push('(this page had no importable content — ink pages come through only as pictures)', 14);
   return rec;
 }
+/* ============================================================
+   SUBJECT — which specialist is teaching. The prompt for each lives in
+   prompts.json (method, notation, what students get wrong here, how
+   practitioners actually work), so a chemistry answer enforces units
+   and a code answer makes you read the error.
+   ============================================================ */
+const subjectSel = document.getElementById('subjectSel'), teachSubject = document.getElementById('teachSubject');
+function fillSubjects() {
+  const subs = (PROMPTS && PROMPTS.subjects) || {general: {name: 'General'}};
+  const opts = Object.entries(subs).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+  subjectSel.innerHTML = opts; teachSubject.innerHTML = opts;
+  subjectSel.value = subject(); teachSubject.value = subject();
+}
+const subject = () => { try { return (current && current.subject) || localStorage.getItem('showwork.subject') || 'general'; } catch { return 'general'; } };
+function setSubject(k) {
+  if (current) current.subject = k;
+  subjectSel.value = k; teachSubject.value = k;
+  try { localStorage.setItem('showwork.subject', k); } catch {}
+  dirty();
+}
+subjectSel.onchange = () => setSubject(subjectSel.value);
+
 /* Teach me…: a fresh page named for the topic, the level saved, and the lesson opened in the chat */
 const teachEl = document.getElementById('teach');
-document.getElementById('teachBtn').onclick = () => { teachEl.classList.toggle('on'); document.getElementById('teachLevel').value = learnerLevel() || 'college'; document.getElementById('teachTopic').focus(); };
+document.getElementById('teachBtn').onclick = () => { teachEl.classList.toggle('on'); document.getElementById('teachLevel').value = learnerLevel() || 'college'; teachSubject.value = subject(); document.getElementById('teachTopic').focus(); };
 document.getElementById('teachTopic').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('teachGo').onclick(); });
 document.getElementById('teachGo').onclick = async () => {
   const what = document.getElementById('teachTopic').value.trim(); if (!what) return say('Type what you want to learn.', true);
-  const level = document.getElementById('teachLevel').value;
+  const level = document.getElementById('teachLevel').value, subj = teachSubject.value;
   teachEl.classList.remove('on'); document.getElementById('teachTopic').value = '';
   await newPage(current.notebook, current.section, what.slice(0, 60));
   await setLearnerLevel(level);
+  setSubject(subj);
   topicEl.value = what; dirty();
   if (!chatEl.classList.contains('open')) chatBtn.onclick();
   chatIn.value = `Teach me ${what}. My level: ${document.querySelector('#teachLevel option:checked').textContent.toLowerCase()}.`;
@@ -2791,7 +2853,7 @@ document.getElementById('examBtn').onclick = async () => {
   if (!WIDE()) setSide(false);
   say('Writing a practice exam on ' + t + '…');
   try {
-    const r = await api('/chat', {image: null, context: t, sources: sourcesFor(t + ' practice questions exercises examples'), messages: [{role: 'user', text:
+    const r = await api('/chat', {image: null, context: t, subject: subject(), sources: sourcesFor(t + ' practice questions exercises examples'), messages: [{role: 'user', text:
       `Write a practice exam of 5 questions on: ${t}. Match the difficulty of a college homework set on this topic. ` +
       `Put ALL five in "board" as ONE plain string, numbered "1." to "5.", ONE question per line, plain text (for math write sqrt(x), x^(-2), (a/b) — NO LaTeX, no backslashes), NO answers and NO hints. ` +
       `In "say", one sentence telling me to work them on the page and check each one.`}]});
@@ -2872,7 +2934,7 @@ async function inkTo(kind) {
     const o = off.getContext('2d'); o.fillStyle = '#fff'; o.fillRect(0, 0, off.width, off.height);
     o.scale(SCALE, SCALE); o.translate(PAD - box.minX, PAD - box.minY); o.lineCap = 'round'; o.lineJoin = 'round';
     for (const st of sel.strokes) drawStroke(o, st);
-    const r = await api('/transcribe', {image: off.toDataURL('image/jpeg', .9), context: kind === 'math'
+    const r = await api('/transcribe', {image: off.toDataURL('image/jpeg', .9), subject: subject(), context: kind === 'math'
       ? 'This is ONE handwritten math expression. Return it as a single line of plain-text math (use sqrt(), ^, /, *). No brackets for doubt, no commentary.'
       : 'These are handwritten notes. Return the words as plain text, keeping line breaks. No brackets for doubt, no commentary.'});
     const text = (r.transcription || '').replace(/\[[^\]]*\]/g, '').trim();
@@ -3158,6 +3220,7 @@ function coachTick() { if (coachWait) coachWait(); }
   else await openPage(pickStart());
   if (WIDE()) setSide(true);                         /* OneNote keeps its columns open on a wide screen */
   if (await msFinishSignIn()) showOnenote();         /* back from Microsoft? open the notebook picker */
+  try { fillSubjects(); } catch {}                   /* prompts may have arrived before the page was wired */
   if (!coachDone()) { showTab('home'); setTimeout(() => showCoach(0), 500); }   /* a stranger's first minute */
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});   /* installable; shell opens offline */
 })();

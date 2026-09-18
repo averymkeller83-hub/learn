@@ -35,7 +35,7 @@ export default {
         return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       if (url.pathname === "/prompts.json") {     // the browser needs them for bring-your-own-key
-        return new Response(JSON.stringify(prompts), { headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify(prompts), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
       }
       if (url.pathname === "/fetch") return fetchPage(url.searchParams.get("url") || "");
       if (url.pathname === "/manifest.webmanifest") return new Response(manifest, { headers: { "Content-Type": "application/manifest+json" } });
@@ -70,6 +70,10 @@ export default {
     if (src) note += prompts.sources_note.replace("{sources}", src);
     // the calculator setting: may the tutor do the numbers, or must the student?
     if (data.calc === "on" || data.calc === "off") note += prompts[data.calc === "on" ? "calc_on_note" : "calc_off_note"];
+    // the subject persona: teach like someone who does this work
+    const subj = (prompts.subjects || {})[String(data.subject || "")];
+    if (subj) note += prompts.subject_note.replace("{subject}", subj.prompt);
+
     // who the learner is: their level, and what the tutor has learned about them
     if (String(data.level || "").trim()) note += prompts.level_note.replace("{level}", String(data.level).trim().slice(0, 40));
     if (String(data.learner || "").trim()) note += prompts.learner_note.replace("{learner}", String(data.learner).trim().slice(0, 3000));
@@ -84,7 +88,8 @@ export default {
         if (!msgs.length) return json(400, { error: "no_message", message: "Say something first." });
         const raw = await askGemini(env, chatBody(note + prompts.chat, msgs, b64, mime));
         let say = raw.trim(), board = "", remember = "";
-        try { const out = JSON.parse(stripFence(raw)); say = String(out.say || ""); board = out.board ?? ""; remember = String(out.remember || "").slice(0, 200); } catch {}
+        const out = looseJson(raw);
+        if (out) { say = String(out.say || ""); board = out.board ?? ""; remember = String(out.remember || "").slice(0, 200); }
         return json(200, { say, board, remember, checks_left: null });
       }
 
@@ -111,9 +116,8 @@ export default {
       const raw = await askVision(env, note + prompt, b64, mime, true);
 
       // asked for JSON; if it obliged pass it through, if it rambled hand the ramble over
-      let verdict;
-      try { verdict = JSON.parse(stripFence(raw)); }
-      catch { verdict = { line: "", problem: raw.trim(), nudge: "", all_correct: false }; }
+      let verdict = looseJson(raw);
+      if (!verdict) verdict = { line: "", problem: raw.trim(), nudge: "", all_correct: false };
       verdict.checks_left = null;
       return json(200, verdict);
 
@@ -189,6 +193,18 @@ async function askGemini(env, body) {
   }
   const answer = await res.json();
   return answer.candidates[0].content.parts[0].text;   // dig the words out of the nesting
+}
+
+// the model's JSON, read the way a person would: strict parse, then the
+// widest {...} in the text, then null. Raw JSON must never reach the student.
+function looseJson(text) {
+  const t = stripFence(text);
+  try { return JSON.parse(t); } catch {}
+  const a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if (a >= 0 && b > a) for (let end = b; end > a; end = t.lastIndexOf("}", end - 1)) {
+    try { return JSON.parse(t.slice(a, end + 1)); } catch {}
+  }
+  return null;
 }
 
 // the model likes to wrap JSON in ```json fences — take them off

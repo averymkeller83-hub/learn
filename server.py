@@ -135,6 +135,27 @@ def strip_fence(text):
 
 
 # ============================================================
+# loose_json — the model's JSON, read the way a person would. Even in
+# JSON mode a reply occasionally carries a fence, a stray trailing
+# brace, or a sentence after the object. Strict parse, then the widest
+# {...} in the text, then None. Raw JSON must never reach the student.
+# ============================================================
+def loose_json(text):
+    t = strip_fence(text)
+    try:
+        return json.loads(t)
+    except ValueError:
+        pass
+    a, b = t.find("{"), t.rfind("}")
+    while a >= 0 and b > a:
+        try:
+            return json.loads(t[a:b + 1])
+        except ValueError:
+            b = t.rfind("}", a, b)
+    return None
+
+
+# ============================================================
 # Board — the web server. Two real endpoints, everything else
 # is just handing over files.
 # ============================================================
@@ -154,8 +175,13 @@ class Board(SimpleHTTPRequestHandler):
             self.path = "/index.html"
             return super().do_GET()
         if path == "/prompts.json":                        # the browser needs them for bring-your-own-key
-            self.path = "/prompts.json"
-            return super().do_GET()
+            raw = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts.json"), "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")   # a cached copy would drop new subjects
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            return self.wfile.write(raw)
         if path in ("/manifest.webmanifest", "/sw.js", "/icon-192.png", "/icon-512.png"):   # the installable-app files
             self.path = "/app" + path
             return super().do_GET()
@@ -250,6 +276,11 @@ class Board(SimpleHTTPRequestHandler):
         # ---- the calculator setting: may the tutor do the numbers, or must the student? ----
         if data.get("calc") in ("on", "off"):
             note += PROMPTS["calc_on_note" if data["calc"] == "on" else "calc_off_note"]
+        # ---- the subject persona: teach like someone who does this work ----
+        subj = PROMPTS.get("subjects", {}).get(str(data.get("subject") or ""), None)
+        if subj:
+            note += PROMPTS["subject_note"].replace("{subject}", subj["prompt"])
+
         # ---- who the learner is: their level, and what the tutor has learned about them ----
         if (data.get("level") or "").strip():
             note += PROMPTS["level_note"].replace("{level}", str(data["level"]).strip()[:40])
@@ -267,11 +298,11 @@ class Board(SimpleHTTPRequestHandler):
                 if not msgs:
                     return self.reply(400, {"error": "no_message", "message": "Say something first."})
                 raw = ask(chat_body(note + PROMPTS["chat"], msgs, png, mime))
-                try:
-                    out = json.loads(strip_fence(raw))
+                out = loose_json(raw)
+                if isinstance(out, dict):
                     say, board = str(out.get("say", "")), out.get("board", "") or ""   # a string or a list of steps
                     remember = str(out.get("remember", "") or "")[:200]
-                except (ValueError, AttributeError):
+                else:
                     say, board, remember = raw.strip(), "", ""
                 return self.reply(200, {"say": say, "board": board, "remember": remember,
                                         "checks_left": CHECK_BUDGET - Board.checks_used})
@@ -307,9 +338,8 @@ class Board(SimpleHTTPRequestHandler):
             # ---- the model was asked for JSON. If it obliged, pass it ----
             # ---- through. If it rambled, hand the ramble over rather  ----
             # ---- than pretending we got nothing.                      ----
-            try:
-                verdict = json.loads(strip_fence(raw))
-            except ValueError:
+            verdict = loose_json(raw)
+            if not isinstance(verdict, dict):
                 verdict = {"line": "", "problem": raw.strip(),
                            "nudge": "", "all_correct": False}
 
