@@ -1568,9 +1568,10 @@ function write(text) {
   let width = box ? box.maxX - box.minX : 0;
   for (const m of aiMarks) width = Math.max(width, markBox(m).maxX - m.x);
   width = Math.max(640, width);                    /* never a skinny column */
+  const o = visibleOrigin();
   const mark = {
-    x: box ? box.minX : 60,
-    y: Math.max(box ? box.maxY + size * 1.2 : 140, aiBottom() + size * 0.8),
+    x: box ? box.minX : o.x,
+    y: Math.max(box ? box.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8),
     size,
     text: wrap(text, width, size),
     shown: 0,
@@ -1600,9 +1601,10 @@ function renderBoard(board) {
 
   const size = handSize();
   let b = bounds(); for (const m of aiMarks) b = union(b, markBox(m));
-  const x0 = b ? b.minX : 60;
+  const o = visibleOrigin();
+  const x0 = b ? b.minX : o.x;
   const W = Math.max(640, b ? b.maxX - b.minX : 0), H = Math.min(520, Math.max(240, W * 0.5));
-  let y0 = Math.max(b ? b.maxY + size * 1.2 : 140, aiBottom() + size * 0.8);   /* top of the current sketch area */
+  let y0 = Math.max(b ? b.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8);   /* top of the current sketch area */
   let sketching = false, shown = false;
   const P = xy => ({x: x0 + (Math.max(0, Math.min(100, +xy[0] || 0)) / 100) * W,
                     y: y0 + (Math.max(0, Math.min(100, +xy[1] || 0)) / 100) * H});
@@ -2108,14 +2110,15 @@ document.getElementById('examBtn').onclick = async () => {
     await newPage(current.notebook, current.section, 'Practice — ' + t.slice(0, 40));
     topicEl.value = t;
     current.exam = {locked: true, n: lines.length, graded: false};   /* tutor off until "I'm done" */
-    const size = 24, ROOM = 170;                    /* ~4 lines of handwriting under each problem */
-    let y = 40;
+    const size = 24, ROOM = 170;                    /* ~4 lines of handwriting under each question */
+    pan = {x: 0, y: 0}; zoom = 1;
+    const o = visibleOrigin();
+    let y = o.y;
     for (const line of lines) {
       const text = wrap(line, 900, size);
-      aiMarks.push({x: 60, y, size, text, shown: text.length});
+      aiMarks.push({x: o.x, y, size, text, shown: text.length});
       y += text.split('\n').length * size * 1.35 + ROOM;
     }
-    pan = {x: 0, y: 110}; zoom = 1;
     chat.push({role: 'ai', text: (r.say || '').trim() || 'Work these on the page, then check each one.'});
     applyExamState(); redraw(); renderChat(); dirty();
     say(lines.length + ' problems on the page. The tutor is locked until you tap "I\'m done".');
@@ -2224,6 +2227,12 @@ document.getElementById('fmtNumbers').onclick   = () => fmt(t => prefixLines(t, 
 document.getElementById('tagTodo').onclick      = () => fmt(t => prefixLines(t, ln => '☐ ' + ln));
 document.getElementById('tagStar').onclick      = () => fmt(t => prefixLines(t, ln => '★ ' + ln));
 document.getElementById('tagQ').onclick         = () => fmt(t => prefixLines(t, ln => '? ' + ln));
+
+/* the top-left of the visible page (right of the sidebar, under the ribbon and header), in board coordinates */
+function visibleOrigin() {
+  const left = (sideEl.classList.contains('open') && WIDE() ? 470 : 0) + 40, top = 210;
+  return {x: (left - pan.x) / zoom, y: (top - pan.y) / zoom};
+}
 
 /* a text box at the middle of what you're looking at */
 function viewCenter() { return {x: ((sideEl.classList.contains('open') && WIDE() ? 470 : 0) + innerWidth) / 2, y: innerHeight / 2}; }
