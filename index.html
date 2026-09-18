@@ -601,7 +601,9 @@ const PALM_MS = 1500;    /* a finger inside this window of pen contact is a palm
 let penSeen = false;     /* once a real pen has touched, single fingers are palms, full stop */
 
 cv.addEventListener('pointerdown', e => {
-  cv.setPointerCapture(e.pointerId);
+  /* capture so the up arrives even if the pen crosses the edge; a pointer that
+     is already gone (or a synthetic one) throws here, and that must not kill the stroke */
+  try { cv.setPointerCapture(e.pointerId); } catch {}
   if (!WIDE()) setSide(false); exportMenu.classList.remove('open');      /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
