@@ -244,6 +244,9 @@ class Board(SimpleHTTPRequestHandler):
         src = (data.get("sources") or "").strip()[:9000]
         if src:
             note += PROMPTS["sources_note"].replace("{sources}", src)
+        # ---- the calculator setting: may the tutor do the numbers, or must the student? ----
+        if data.get("calc") in ("on", "off"):
+            note += PROMPTS["calc_on_note" if data["calc"] == "on" else "calc_off_note"]
 
         try:
             # ============================================

@@ -60,6 +60,8 @@ export default {
     // excerpts from the student's own textbooks, picked by the browser
     const src = String(data.sources || "").trim().slice(0, 9000);
     if (src) note += prompts.sources_note.replace("{sources}", src);
+    // the calculator setting: may the tutor do the numbers, or must the student?
+    if (data.calc === "on" || data.calc === "off") note += prompts[data.calc === "on" ? "calc_on_note" : "calc_off_note"];
 
     try {
       // ============================================

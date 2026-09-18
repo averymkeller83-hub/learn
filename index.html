@@ -269,6 +269,8 @@
   #settings input { width: 100%; font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); color: var(--text); }
   #settings .row { display: flex; gap: 8px; margin-top: 10px; }
   #settings .row button { flex: 1; }
+  #settings .opt { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); margin-bottom: 4px; }
+  #settings .opt input { margin-top: 3px; } #settings .opt code { background: #efe9f5; padding: 0 4px; border-radius: 4px; }
 
   #status { position: fixed; left: 16px; bottom: 14px; z-index: 10; font-size: 13px; color: var(--muted); max-width: 50vw; }
   #status.bad { color: #a33; }
@@ -341,6 +343,7 @@
   <symbol id="f-zoom_fit" viewBox="0 0 24 24"><path d="M11.49 2.7a.75.75 0 0 1 1.03 0l2.2 2.1a.75.75 0 1 0 1.04-1.09l-2.2-2.09a2.25 2.25 0 0 0-3.1 0L8.24 3.7a.75.75 0 0 0 1.03 1.1zM4.8 9.27a.75.75 0 0 0-1.09-1.02l-2.1 2.22a2.25 2.25 0 0 0 .01 3.09l2.1 2.2a.75.75 0 1 0 1.08-1.03l-2.09-2.2a.75.75 0 0 1 0-1.03zM20.3 8.24a.75.75 0 1 0-1.09 1.04l2.1 2.2c.27.3.27.75 0 1.04l-2.1 2.21a.75.75 0 0 0 1.09 1.04l2.1-2.22c.82-.87.82-2.23 0-3.1zM15.77 20.3a.75.75 0 0 0-1.04-1.09l-2.2 2.1a.75.75 0 0 1-1.04 0l-2.22-2.1a.75.75 0 0 0-1.03 1.09l2.22 2.1c.87.82 2.23.82 3.1 0zM9.75 7A2.75 2.75 0 0 0 7 9.75v4.5A2.75 2.75 0 0 0 9.75 17h4.5A2.75 2.75 0 0 0 17 14.25v-4.5A2.75 2.75 0 0 0 14.25 7zM8.5 9.75c0-.69.56-1.25 1.25-1.25h4.5c.69 0 1.25.56 1.25 1.25v4.5c0 .69-.56 1.25-1.25 1.25h-4.5c-.69 0-1.25-.56-1.25-1.25z"/></symbol>
   <symbol id="f-zoom_in" viewBox="0 0 24 24"><path d="M10 6.5c.41 0 .75.34.75.75v2h2a.75.75 0 0 1 0 1.5h-2v2a.75.75 0 0 1-1.5 0v-2h-2a.75.75 0 0 1 0-1.5h2v-2c0-.41.34-.75.75-.75M10 2a8 8 0 0 1 6.16 13.1l4.62 4.62a.75.75 0 0 1-1.06 1.06l-4.62-4.62A8 8 0 1 1 10 2m0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13"/></symbol>
   <symbol id="f-zoom_out" viewBox="0 0 24 24"><path d="M12.75 9.25a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1 0-1.5zM10 2a8 8 0 0 1 6.16 13.1l4.62 4.62a.75.75 0 0 1-1.06 1.06l-4.62-4.62A8 8 0 1 1 10 2m0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13"/></symbol>
+  <symbol id="f-calculator" viewBox="0 0 24 24"><path d="M7 7c0-1.1.9-2 2-2h6a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2zm2-.5a.5.5 0 0 0-.5.5v1c0 .28.22.5.5.5h6a.5.5 0 0 0 .5-.5V7a.5.5 0 0 0-.5-.5zm-.75 8a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5m1.25 2.75a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0m6.25-2.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5M17 17.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0m-5-2.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5m1.25 2.75a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0M7.25 2A3.25 3.25 0 0 0 4 5.25v13.5C4 20.55 5.46 22 7.25 22h9.5c1.8 0 3.25-1.46 3.25-3.25V5.25C20 3.45 18.54 2 16.75 2zM5.5 5.25c0-.97.78-1.75 1.75-1.75h9.5c.97 0 1.75.78 1.75 1.75v13.5c0 .97-.78 1.75-1.75 1.75h-9.5c-.97 0-1.75-.78-1.75-1.75z"/></symbol>
 </svg>
 
 <div id="ribbon">
@@ -410,6 +413,7 @@
       <button class="rbtn" id="mathBtn"  title="Math"><svg><use href="#f-math_formula"/></svg><span>Math</span></button>
       <button class="rbtn" id="symBtn"  title="Symbol"><svg><use href="#f-symbols"/></svg><span>Symbol</span></button>
       <button class="rbtn" id="dateBtn"  title="Date &amp; time"><svg><use href="#f-calendar_clock"/></svg><span>Date &amp; time</span></button>
+      <button class="rbtn" id="calcBtn"  title="Calculate — type 3*(4+5) = and press Enter"><svg><use href="#f-calculator"/></svg><span>Calculate</span></button>
     </div>
     <div class="group">
       <button class="rbtn" id="examBtn2"  title="Practice exam"><svg><use href="#f-clipboard_task_list_ltr"/></svg><span>Practice exam</span></button>
@@ -483,7 +487,9 @@
 </div>
 
 <div id="settings">
-  <h2>Use your own Gemini key</h2>
+  <h2>Settings</h2>
+  <label class="opt"><input type="checkbox" id="calcOpt" checked> <span><b>Calculator</b> — typing <code>3*(4+5) =</code> in a text box fills in the answer, and the tutor may do arithmetic. Turn it off to make the student do every number.</span></label>
+  <h2 style="margin-top:14px">Your own Gemini key</h2>
   <p>Anyone with a Google account gets a free key in one tap at
      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
      Paste it here and every check and chat runs on <b>your</b> free quota.</p>
@@ -1237,7 +1243,37 @@ function placeTextEdit() {
   textEdit.style.width = w + 'px';
 }
 textEdit.addEventListener('input', () => { if (editing) { editing.text = textEdit.value; placeTextEdit(); } });
-textEdit.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); commitText(); } });
+textEdit.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.preventDefault(); commitText(); return; }
+  if ((e.key === 'Enter' && !e.shiftKey) || e.key === ' ') calcHere();   /* "3*(4+5) =" + Enter -> "3*(4+5) = 27" */
+});
+
+/* ============================================================
+   CALCULATOR — OneNote's trick: an expression ending in "=" gets its
+   answer when you press Enter or space. Same whitelisted evaluator
+   as the plots (no free code). Off in Settings -> nothing happens,
+   and the tutor is told to make the student do the numbers.
+   ============================================================ */
+const calcOn = () => { try { return localStorage.getItem('showwork.calc') !== 'off'; } catch { return true; } };
+function calcHere() {
+  if (!calcOn() || !editing) return;
+  const v = textEdit.value, pos = textEdit.selectionStart;
+  const start = v.lastIndexOf('\n', pos - 1) + 1, line = v.slice(start, pos);
+  const m = line.match(/^(.*\S)\s*=\s*$/); if (!m) return;
+  const f = compileExpr(m[1]); if (!f) return;
+  let r; try { r = f(0); } catch { return; }
+  if (!isFinite(r)) return;
+  const shown = Math.abs(r) >= 1e12 ? r.toExponential(6) : String(+r.toPrecision(10));
+  textEdit.setRangeText((line.endsWith(' ') ? '' : ' ') + shown, pos, pos, 'end');
+  textEdit.dispatchEvent(new Event('input'));
+}
+const calcOpt = document.getElementById('calcOpt');
+calcOpt.checked = calcOn();
+calcOpt.onchange = () => { try { localStorage.setItem('showwork.calc', calcOpt.checked ? 'on' : 'off'); } catch {} say(calcOpt.checked ? 'Calculator on.' : 'Calculator off — the tutor will make you do the numbers.'); };
+document.getElementById('calcBtn').onclick = () => {
+  if (!calcOn()) return say('The calculator is off (⚙ Settings).', true);
+  setTool('text'); editText({...newTextAt(viewCenter(), ''), fresh: true}); say('Type an expression ending in "=" and press Enter, e.g. 3*(4+5) =');
+};
 textEdit.addEventListener('blur', () => commitText());
 function commitText() {
   const t = editing; if (!t) return;
@@ -1447,7 +1483,7 @@ async function runCheck() {
   if (examOpen()) return runGrade();
   busy(true, 'Looking for the first thing to fix…');
   try {
-    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600))});
+    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600)), calc: calcOn() ? 'on' : 'off'});
     if (v.all_correct) {
       write("Nothing wrong here.\nThis is all correct.");
     } else {
@@ -1468,7 +1504,7 @@ async function runCheck() {
 async function runGrade() {
   busy(true, 'Grading…');
   try {
-    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), mode: 'grade', n: current.exam.n, sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600))});
+    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), mode: 'grade', n: current.exam.n, sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600)), calc: calcOn() ? 'on' : 'off'});
     const results = Array.isArray(v.results) ? v.results : [];
     for (const r of results) if (!r.correct && Array.isArray(r.wrong_box) && r.wrong_box.length === 4) strike(r.wrong_box);
     const right = results.filter(r => r.correct).length;
@@ -1531,6 +1567,7 @@ async function api(path, body) {
   let note = ctx ? PROMPTS.context_note.replace('{context}', ctx) : '';
   const src = (body.sources || '').trim().slice(0, 9000);
   if (src) note += PROMPTS.sources_note.replace('{sources}', src);
+  if (body.calc === 'on' || body.calc === 'off') note += PROMPTS[body.calc === 'on' ? 'calc_on_note' : 'calc_off_note'];
 
   if (path === '/transcribe') {
     const text = await gemini(key, {contents: [{parts: [{text: note + PROMPTS.transcribe}, imgPart(body.image)]}]});
@@ -1956,6 +1993,7 @@ document.getElementById('chatform').addEventListener('submit', async e => {
       image: s ? s.url : null,
       context: topic(),
       sources: sourcesFor(topic() + ' ' + text + ' ' + chat.slice(-3).map(m => m.text).join(' ')),
+      calc: calcOn() ? 'on' : 'off',
       messages: chat.slice(-16).map(m => ({role: m.role === 'you' ? 'user' : 'model', text: m.text})),
     });
     if (typeof r.say === 'string' && /^\s*(```|\{)/.test(r.say)) {          /* a raw JSON reply that slipped through */
