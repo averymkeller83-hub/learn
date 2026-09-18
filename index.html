@@ -38,7 +38,8 @@
     --text:    #2e2c28;
     --muted:   #7a746a;
     --ai-ink:  #c2410c;   /* RESERVED. Never a student colour. */
-    --accent:  #3f5d52;
+    --accent:  #7719aa;   /* OneNote purple */
+    --accent-dark: #5e1287;
     --side:    #f4f1ea;
   }
 
@@ -58,21 +59,38 @@
   #board.erasing { cursor: cell; }
 
   /* ============================================================
-     THE TOOLBAR — one row, no modes to learn. Pick up a pen, write.
+     THE RIBBON — OneNote's: a purple title strip with Home · Insert ·
+     Draw, and under it a white row of icon-over-label buttons.
      ============================================================ */
-  #bar {
-    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 12px; border-radius: 12px;
-    background: var(--ui); border: 1px solid var(--edge);
-    box-shadow: 0 2px 14px rgba(0,0,0,.07);
-    z-index: 20; max-width: calc(100vw - 16px); overflow-x: auto;
-  }
-  .pens { display: flex; gap: 7px; }
-  .pen {
-    width: 26px; height: 26px; border-radius: 50%;
-    border: 2px solid transparent; cursor: pointer; padding: 0; flex: none;
-  }
+  #ribbon { position: fixed; top: 0; left: 0; right: 0; z-index: 20; background: var(--ui);
+            border-bottom: 1px solid var(--edge); box-shadow: 0 1px 8px rgba(0,0,0,.06); }
+  body.side-open #ribbon { left: 470px; }
+  .rtop { display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 10px 0 6px; background: var(--accent); color: #fff; }
+  .rtop .app { font-weight: 700; font-size: 15px; margin: 0 14px 0 4px; letter-spacing: .01em; display: flex; align-items: center; gap: 8px; }
+  .rtop .tabs { display: flex; gap: 2px; height: 100%; }
+  .rtop .tab { border: 0; background: transparent; color: rgba(255,255,255,.85); font: inherit; font-size: 14px; padding: 0 14px;
+               cursor: pointer; height: 100%; border-bottom: 3px solid transparent; }
+  .rtop .tab[aria-selected="true"] { color: #fff; border-bottom-color: #fff; font-weight: 600; }
+  .rtop .grow { flex: 1; }
+  .rtop .ibtn { border: 0; background: transparent; color: #fff; width: 36px; height: 36px; border-radius: 6px; cursor: pointer; display: grid; place-items: center; }
+  .rtop .ibtn:hover { background: rgba(255,255,255,.14); }
+  .rtop button.primary { background: #fff; color: var(--accent); border-color: #fff; }
+  .rtop button.primary:hover:not(:disabled) { background: #f1e6f7; }
+  .rpanel { display: flex; align-items: stretch; gap: 2px; height: 66px; padding: 4px 10px; overflow-x: auto; }
+  .rpanel[hidden] { display: none; }
+  .rbtn { border: 1px solid transparent; background: transparent; color: var(--text); font: inherit; font-size: 11.5px; line-height: 1.1;
+          border-radius: 6px; padding: 5px 9px 4px; min-width: 58px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
+          justify-content: center; gap: 5px; white-space: nowrap; flex: none; }
+  .rbtn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; color: #4a4560; }
+  .rbtn:hover:not(:disabled) { background: #f3eef8; border-color: #e6dcef; }
+  .rbtn[aria-pressed="true"] { background: #ede2f5; border-color: var(--accent); }
+  .rbtn[aria-pressed="true"] svg { color: var(--accent); }
+  .rbtn:disabled { opacity: .4; cursor: not-allowed; }
+  .rpanel .group { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-right: 1px solid var(--edge); margin-right: 6px; }
+  .rpanel .group:last-child { border-right: 0; }
+  .pens { display: flex; gap: 8px; align-items: center; padding: 0 6px; }
+  .pen { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; flex: none;
+         box-shadow: inset 0 0 0 2px #fff; }
   .pen[aria-pressed="true"] { border-color: var(--accent); transform: scale(1.12); }
   .sep { width: 1px; height: 24px; background: var(--edge); flex: none; }
 
@@ -83,13 +101,19 @@
   }
   button.act:hover:not(:disabled) { background: #f4f1ea; }
   button.act:disabled { opacity: .45; cursor: not-allowed; }
-  button.act[aria-pressed="true"] { background: #ebe6da; border-color: var(--accent); }
+  button.act[aria-pressed="true"] { background: #ede2f5; border-color: var(--accent); }
   button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
-  button.primary:hover:not(:disabled) { background: #354f45; }
   button.icon { padding: 7px 10px; font-size: 16px; line-height: 1; }
 
+  /* typing on the page: the live text box, in the page's font */
+  #textEdit { position: fixed; z-index: 18; display: none; min-width: 120px; min-height: 1.4em; padding: 2px 4px; margin: 0;
+              border: 1px dashed var(--accent); border-radius: 3px; background: rgba(255,255,255,.7); color: var(--text);
+              font-family: ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif; line-height: 1.3; resize: none; overflow: hidden;
+              outline: none; -webkit-user-select: text; user-select: text; }
+  #board.typing { cursor: text; }
+
   /* the selection bar appears when something is circled */
-  #selBar { position: fixed; top: 104px; left: 50%; transform: translateX(-50%); z-index: 22; display: none; gap: 8px;
+  #selBar { position: fixed; top: 120px; left: 50%; transform: translateX(-50%); z-index: 22; display: none; gap: 8px;
             align-items: center; padding: 6px 8px 6px 12px; background: var(--ui); border: 1px solid var(--edge);
             border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.09); font-size: 13px; color: var(--muted); }
   #selBar.on { display: flex; }
@@ -103,7 +127,7 @@
 
   /* ---- the page header, on the page like OneNote: big title, the date under it ---- */
   #meta {
-    position: fixed; top: 66px; left: 28px; width: min(560px, calc(100vw - 56px)); z-index: 19;
+    position: fixed; top: 124px; left: 28px; width: min(560px, calc(100vw - 56px)); z-index: 19;
     display: flex; flex-direction: column; gap: 2px; pointer-events: none;
   }
   #meta input { pointer-events: auto; border: 0; background: transparent; font: inherit; color: var(--text); padding: 4px 6px; margin-left: -6px; border-radius: 6px;
@@ -121,15 +145,21 @@
      ============================================================ */
   #side {
     position: fixed; top: 0; left: 0; bottom: 0; width: min(470px, 100vw); z-index: 30;
+    box-shadow: 2px 0 12px rgba(0,0,0,.05);
     background: var(--side); border-right: 1px solid var(--edge);
     transform: translateX(-100%); transition: transform .18s ease;
     display: flex; flex-direction: column;
     -webkit-user-select: text; user-select: text;
   }
   #side.open { transform: none; }
-  #side .nb { display: flex; align-items: center; gap: 6px; padding: 14px 12px 10px; border-bottom: 1px solid var(--edge); }
-  #side .nb select { flex: 1; min-width: 0; font: inherit; font-size: 16px; font-weight: 700; padding: 6px 4px;
-                     border: 0; background: transparent; color: var(--text); appearance: none; -webkit-appearance: none; cursor: pointer; }
+  #side .nb { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px 0 12px; background: var(--accent); color: #fff; }
+  #side .nb select { color: #fff; }
+  #side .nb .act { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
+  #side .nb .act:hover { background: rgba(255,255,255,.14); }
+  #side .nb svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 1.7; flex: none; }
+  #side .nb select { flex: 1; min-width: 0; font: inherit; font-size: 15px; font-weight: 700; padding: 6px 4px;
+                     border: 0; background: transparent; appearance: none; -webkit-appearance: none; cursor: pointer; }
+  #side .nb select option { color: var(--text); }
   #side .cols { flex: 1; display: flex; min-height: 0; }
   #side .col { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   #side .col.sections { width: 196px; border-right: 1px solid var(--edge); background: #efebe2; }
@@ -155,9 +185,8 @@
   #side .foot { font-size: 12px; color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--edge); }
 
   /* when the sidebar is open on a wide screen, the page's chrome moves right of it */
-  body.side-open #bar { left: calc(470px + (100vw - 470px) / 2); max-width: calc(100vw - 470px - 24px); }
   body.side-open #meta { left: 498px; width: min(560px, calc(100vw - 470px - 56px)); }
-  @media (max-width: 1099px) { body.side-open #bar { left: 50%; } body.side-open #meta { left: 28px; } }
+  @media (max-width: 1099px) { body.side-open #ribbon { left: 0; } body.side-open #meta { left: 28px; } }
 
   /* ============================================================
      THE CHAT — talk to the tutor. It sees the board every time.
@@ -185,7 +214,7 @@
      THE READ-BACK PANEL — only when the model wasn't sure.
      ============================================================ */
   #panel {
-    position: fixed; left: 50%; top: 112px; transform: translateX(-50%); width: min(420px, calc(100vw - 32px));
+    position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(420px, calc(100vw - 32px));
     max-height: calc(100vh - 140px); overflow: auto;
     background: var(--ui); border: 1px solid var(--edge); border-radius: 12px;
     box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none;
@@ -205,7 +234,7 @@
 
   /* settings: bring your own key */
   #settings {
-    position: fixed; left: 50%; top: 112px; transform: translateX(-50%); width: min(440px, calc(100vw - 32px));
+    position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(440px, calc(100vw - 32px));
     background: var(--ui); border: 1px solid var(--edge); border-radius: 12px;
     box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none;
     -webkit-user-select: text; user-select: text;
@@ -229,38 +258,77 @@
 
 <canvas id="board"></canvas>
 
-<div id="bar">
-  <button class="act icon" id="sideBtn" title="Notebooks">☰</button>
-  <div class="pens" id="pens"></div>
-  <button class="act" id="thick" title="Pen thickness">●</button>
-  <button class="act" id="eraser" aria-pressed="false" title="Eraser — touch a stroke to remove it">Eraser</button>
-  <button class="act" id="select" aria-pressed="false" title="Select — circle anything to move or delete it">Select</button>
-  <div class="sep"></div>
-  <button class="act" id="undo" title="Undo">Undo</button>
-  <button class="act" id="redo" title="Redo">Redo</button>
-  <button class="act" id="clear" title="Clear the ink on this page (keeps the PDF)">Clear</button>
-  <div class="sep"></div>
-  <button class="act" id="pdfbtn" title="Put a PDF on this page to write on">PDF</button>
-  <input type="file" id="pdffile" accept="application/pdf" hidden>
-  <button class="act" id="exportBtn" title="Send this page or notebook to OneNote, Drive, Files…">Export</button>
-  <div class="sep"></div>
-  <button class="act primary" id="check">Check my work</button>
-  <button class="act" id="chatBtn" aria-pressed="false" title="Talk to the tutor">Chat</button>
-  <button class="act icon" id="setBtn" title="Settings — use your own Gemini key">⚙</button>
-</div>
-<div id="settings">
-  <h2>Use your own Gemini key</h2>
-  <p>Anyone with a Google account gets a free key in one tap at
-     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
-     Paste it here and every check and chat runs on <b>your</b> free quota.</p>
-  <p class="fine">The key is kept only in this browser and sent straight to Google. It never touches Showwork's server.</p>
-  <input id="keyIn" type="password" placeholder="AIza…" autocomplete="off" spellcheck="false">
-  <div class="row">
-    <button class="act" id="keyClear">Remove</button>
-    <button class="act primary" id="keySave">Save key</button>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3z"/><path d="M5 4v16a3 3 0 0 1 3-3h11"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M14.5 4.5l5 5L8 21H3v-5z"/><path d="M12.5 6.5l5 5"/></symbol>
+  <symbol id="i-thick" viewBox="0 0 24 24"><path d="M4 7h16" stroke-width="1"/><path d="M4 12h16" stroke-width="2.5"/><path d="M4 18h16" stroke-width="4.5"/></symbol>
+  <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M15 4l5 5-9 9H8l-4-4 11-10z"/><path d="M6 20h14"/><path d="M9.5 9.5l5 5"/></symbol>
+  <symbol id="i-lasso" viewBox="0 0 24 24"><path d="M12 4c5 0 8 2.2 8 5s-3 5-8 5-8-2.2-8-5 3-5 8-5z" stroke-dasharray="3 2.5"/><path d="M7 14c-1 2 0 4 1.5 5.5S11 21 11 21"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 0 12h-1" transform="translate(0 -6)"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 7l5 5-5 5"/><path d="M20 12h-9a6 6 0 0 0 0 12h1" transform="translate(0 -6)"/></symbol>
+  <symbol id="i-clear" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-exam" viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M8 9h3M8 13h3M8 17h3"/><path d="M13.5 9l1 1 2-2M13.5 13l1 1 2-2"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12.5h5"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v7h14v-7"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></symbol>
+</svg>
+
+<div id="ribbon">
+  <div class="rtop">
+    <button class="ibtn" id="sideBtn" title="Notebooks"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#i-menu"/></svg></button>
+    <div class="app"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><use href="#i-book"/></svg>Showwork</div>
+    <div class="tabs" id="tabs">
+      <button class="tab" data-tab="home">Home</button>
+      <button class="tab" data-tab="insert">Insert</button>
+      <button class="tab" data-tab="draw" aria-selected="true">Draw</button>
+    </div>
+    <div class="grow"></div>
+    <button class="act primary" id="check">Check my work</button>
   </div>
-  <p class="fine" id="keyState"></p>
+
+  <div class="rpanel" data-panel="home" hidden>
+    <div class="group">
+      <button class="rbtn" id="chatBtn" aria-pressed="false" title="Talk to the tutor"><svg><use href="#i-chat"/></svg><span>Tutor</span></button>
+      <button class="rbtn" id="exportBtn" title="Send this page or notebook to OneNote, Drive, Files…"><svg><use href="#i-share"/></svg><span>Export</span></button>
+    </div>
+    <div class="group">
+      <button class="rbtn" id="setBtn" title="Settings — use your own Gemini key"><svg><use href="#i-gear"/></svg><span>Settings</span></button>
+    </div>
+  </div>
+
+  <div class="rpanel" data-panel="insert" hidden>
+    <div class="group">
+      <button class="rbtn" id="textBtn" aria-pressed="false" title="Type on the page"><svg><use href="#i-text"/></svg><span>Text</span></button>
+      <button class="rbtn" id="pdfbtn" title="Put a PDF on this page to write on"><svg><use href="#i-file"/></svg><span>PDF</span></button>
+      <input type="file" id="pdffile" accept="application/pdf" hidden>
+    </div>
+    <div class="group">
+      <button class="rbtn" id="examBtn2" title="A new page of practice problems on your topic"><svg><use href="#i-exam"/></svg><span>Practice exam</span></button>
+    </div>
+  </div>
+
+  <div class="rpanel" data-panel="draw">
+    <div class="group">
+      <div class="pens" id="pens"></div>
+      <button class="rbtn" id="thick" title="Pen thickness"><svg><use href="#i-thick"/></svg><span id="thickLabel">Medium</span></button>
+    </div>
+    <div class="group">
+      <button class="rbtn" id="eraser" aria-pressed="false" title="Eraser — touch a stroke to remove it"><svg><use href="#i-eraser"/></svg><span>Eraser</span></button>
+      <button class="rbtn" id="select" aria-pressed="false" title="Select — circle anything to move or delete it"><svg><use href="#i-lasso"/></svg><span>Lasso Select</span></button>
+    </div>
+    <div class="group">
+      <button class="rbtn" id="undo" title="Undo"><svg><use href="#i-undo"/></svg><span>Undo</span></button>
+      <button class="rbtn" id="redo" title="Redo"><svg><use href="#i-redo"/></svg><span>Redo</span></button>
+      <button class="rbtn" id="clear" title="Clear the ink on this page (keeps the PDF)"><svg><use href="#i-clear"/></svg><span>Clear ink</span></button>
+    </div>
+  </div>
 </div>
+<textarea id="textEdit" rows="1" spellcheck="false"></textarea>
+
 <div id="selBar">
   <span id="selCount"></span>
   <button class="act" id="selDelete">Delete</button>
@@ -279,6 +347,7 @@
 
 <aside id="side">
   <div class="nb">
+    <svg><use href="#i-book"/></svg>
     <select id="nbSel" title="Switch notebook"></select>
     <button class="act icon" id="nbAdd" title="New notebook">+</button>
     <button class="act icon" id="sideClose" title="Hide">‹</button>
@@ -320,7 +389,7 @@
 
 <div id="status"></div>
 <button class="act" id="showRead" hidden title="See or fix what was read from your handwriting">What I read ▸</button>
-<div id="hint">Pen or mouse draws · Eraser removes a stroke · Select circles things to move or delete · two fingers pan and zoom</div>
+<div id="hint">Draw: pen or mouse · Insert › Text to type · Lasso to move or delete · two fingers pan and zoom</div>
 
 <script>
 /* ============================================================
@@ -336,6 +405,7 @@ const PENS   = ['#2e2c28', '#1d4ed8', '#166534', '#7c2d12'];  /* no amber here *
 const AI_INK = '#c2410c';                                      /* reserved */
 
 const strokes = [];      /* [{color, width, pts:[{x,y}]}]  — the student's */
+const texts   = [];      /* [{x, y, text, size, color}]     — typed on the page, OneNote-style */
 const pages   = [];      /* [{img, x, y, w, h}] — a PDF's pages, stacked, UNDER the ink */
 const aiMarks = [];      /* [{x, y, size, text, shown}]    — the AI's writing */
 const aiLines = [];      /* [{x1,y1,x2,y2, shown}]         — the AI's strike-throughs */
@@ -390,6 +460,7 @@ addEventListener('resize', fit);
    handwriting scale it is far faster than it needs to be.
    ============================================================ */
 function redraw() {
+  if (editing) placeTextEdit();
   const r = window.devicePixelRatio || 1;
   ctx.setTransform(r, 0, 0, r, 0, 0);
   ctx.clearRect(0, 0, innerWidth, innerHeight);
@@ -451,6 +522,14 @@ function paint(c, {shadows = false, ai = true, pdf = true, revealed = true} = {}
   c.lineJoin = 'round';
   for (const s of strokes) drawStroke(c, s);
   if (c === ctx && drawing) drawStroke(c, drawing);
+
+  /* typed text, in the page's own font (the box being edited is drawn by the textarea instead) */
+  c.textBaseline = 'top';
+  for (const t of texts) {
+    if (c === ctx && t === editing) continue;
+    c.font = textFont(t.size); c.fillStyle = t.color;
+    t.text.split('\n').forEach((ln, i) => c.fillText(ln, t.x, t.y + i * t.size * 1.3));
+  }
 
   if (!ai) return;
 
@@ -545,6 +624,15 @@ cv.addEventListener('pointerdown', e => {
   lastPenAt = performance.now();
   if (e.pointerType === 'pen') penSeen = true;
   panFrom = null; pinch = null; touches.clear();   /* pen wins over fingers */
+
+  /* text: tap an existing box to edit it, tap empty paper to start one */
+  if (tool === 'text') {
+    if (e.pointerType === 'touch') return;
+    const p = pt(e);
+    const hit = texts.find(t => { const b = textBox(t); return p.x >= b.minX - 4 && p.x <= b.maxX + 4 && p.y >= b.minY - 4 && p.y <= b.maxY + 4; });
+    editText(hit || {x: p.x, y: p.y - 9, text: '', size: 18, color: pen, fresh: true});
+    return;
+  }
 
   /* select: inside the selected box, a drag MOVES it; anywhere else, a new loop */
   if (tool === 'select') {
@@ -730,17 +818,19 @@ function markBox(m) {
 }
 function pick(loop) {
   const sel = {
+    texts: texts.filter(t => { const b = textBox(t); return inside(loop, {x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2}); }),
     strokes: strokes.filter(s => s.pts.filter(q => inside(loop, q)).length * 2 >= s.pts.length),
     marks: aiMarks.filter(m => { const b = markBox(m); return inside(loop, {x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2}); }),
     lines: aiLines.filter(l => inside(loop, {x: (l.x1 + l.x2) / 2, y: (l.y1 + l.y2) / 2})),
   };
-  return (sel.strokes.length + sel.marks.length + sel.lines.length) ? sel : null;
+  return (sel.strokes.length + sel.marks.length + sel.lines.length + sel.texts.length) ? sel : null;
 }
 function selectionBox() {
   if (!selection) return null;
   let b = null;
   for (const s of selection.strokes) for (const q of s.pts) b = union(b, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y});
   for (const m of selection.marks) b = union(b, markBox(m));
+  for (const t of selection.texts || []) b = union(b, textBox(t));
   for (const l of selection.lines) b = union(b, {minX: Math.min(l.x1, l.x2), minY: Math.min(l.y1, l.y2), maxX: Math.max(l.x1, l.x2), maxY: Math.max(l.y1, l.y2)});
   return b;
 }
@@ -748,6 +838,7 @@ function shiftSelection(dx, dy, sel = selection) {
   if (!sel) return;
   for (const s of sel.strokes) for (const q of s.pts) { q.x += dx; q.y += dy; }
   for (const m of sel.marks) { m.x += dx; m.y += dy; }
+  for (const t of sel.texts || []) { t.x += dx; t.y += dy; }
   for (const l of sel.lines) { l.x1 += dx; l.x2 += dx; l.y1 += dy; l.y2 += dy; }
 }
 const selBar = document.getElementById('selBar');
@@ -755,7 +846,7 @@ function setSelection(sel) {
   selection = sel;
   selBar.classList.toggle('on', !!sel);
   if (sel) {
-    const n = sel.strokes.length + sel.marks.length + sel.lines.length;
+    const n = sel.strokes.length + sel.marks.length + sel.lines.length + (sel.texts || []).length;
     document.getElementById('selCount').textContent = n + (n === 1 ? ' thing' : ' things') + ' selected';
   }
   redraw();
@@ -766,6 +857,7 @@ function deleteSelection() {
   for (const s of sel.strokes) { const i = strokes.indexOf(s); if (i >= 0) strokes.splice(i, 1); }
   for (const m of sel.marks)   { const i = aiMarks.indexOf(m); if (i >= 0) aiMarks.splice(i, 1); }
   for (const l of sel.lines)   { const i = aiLines.indexOf(l); if (i >= 0) aiLines.splice(i, 1); }
+  for (const t of sel.texts || []) { const i = texts.indexOf(t); if (i >= 0) texts.splice(i, 1); }
   record({type: 'delete', sel});
   setSelection(null); dirty();
 }
@@ -804,16 +896,86 @@ const penWidth = e => ((e.pressure > 0 && e.pointerType === 'pen')
   ? 1.2 + e.pressure * 3.4 : 2.4) * thickness;
 
 /* pen thickness cycles fine -> medium -> bold, like OneNote's pen sizes */
-const THICK = [{k: .7, label: '·', name: 'fine'}, {k: 1, label: '●', name: 'medium'}, {k: 1.6, label: '⬤', name: 'bold'}];
+const THICK = [{k: .7, name: 'Fine'}, {k: 1, name: 'Medium'}, {k: 1.6, name: 'Bold'}];
 let thickI = 1;
 const thickBtn = document.getElementById('thick');
 thickBtn.onclick = () => {
   thickI = (thickI + 1) % THICK.length;
   thickness = THICK[thickI].k;
-  thickBtn.textContent = THICK[thickI].label;
-  thickBtn.title = 'Pen thickness: ' + THICK[thickI].name;
+  document.getElementById('thickLabel').textContent = THICK[thickI].name;
+  thickBtn.title = 'Pen thickness: ' + THICK[thickI].name.toLowerCase();
   setTool('pen');
 };
+
+/* the ribbon's tabs — remembered per device */
+const tabsEl = document.getElementById('tabs');
+function showTab(name) {
+  for (const t of tabsEl.querySelectorAll('.tab')) t.setAttribute('aria-selected', t.dataset.tab === name);
+  for (const pnl of document.querySelectorAll('.rpanel')) pnl.hidden = pnl.dataset.panel !== name;
+  try { localStorage.setItem('showwork.tab', name); } catch {}
+}
+tabsEl.addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) showTab(t.dataset.tab); });
+try { showTab(localStorage.getItem('showwork.tab') || 'draw'); } catch { showTab('draw'); }
+
+/* ============================================================
+   TEXT — type anywhere on the page, the way OneNote does.
+   A tap with the Text tool opens a box at that spot (or re-opens an
+   existing one). What you type lives in texts[] in board coordinates
+   and is drawn on the canvas like everything else — so it's in the
+   snapshot the tutor sees, in exports, and the lasso can move it.
+   ============================================================ */
+const textFont = size => `${size}px ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif`;
+const textEdit = document.getElementById('textEdit');
+let editing = null;
+
+function textBox(t) {
+  ctx.font = textFont(t.size);
+  const lines = t.text.split('\n');
+  const w = Math.max(60, ...lines.map(l => ctx.measureText(l).width));
+  return {minX: t.x, minY: t.y, maxX: t.x + w, maxY: t.y + lines.length * t.size * 1.3};
+}
+function editText(t) {
+  if (editing) commitText();
+  editing = t;
+  if (!texts.includes(t)) texts.push(t);
+  t._before = t.fresh ? null : {x: t.x, y: t.y, text: t.text, size: t.size, color: t.color};
+  textEdit.value = t.text;
+  placeTextEdit();
+  textEdit.style.display = 'block';
+  redraw();
+  setTimeout(() => { textEdit.focus(); textEdit.setSelectionRange(textEdit.value.length, textEdit.value.length); }, 0);
+}
+function placeTextEdit() {
+  if (!editing) return;
+  textEdit.style.left = (editing.x * zoom + pan.x - 5) + 'px';
+  textEdit.style.top = (editing.y * zoom + pan.y - 3) + 'px';
+  textEdit.style.fontSize = (editing.size * zoom) + 'px';
+  textEdit.style.color = editing.color;
+  textEdit.style.height = 'auto';
+  textEdit.style.height = textEdit.scrollHeight + 'px';
+  ctx.font = textFont(editing.size);
+  const w = Math.max(120, ...textEdit.value.split('\n').map(l => ctx.measureText(l).width * zoom + 24));
+  textEdit.style.width = w + 'px';
+}
+textEdit.addEventListener('input', () => { if (editing) { editing.text = textEdit.value; placeTextEdit(); } });
+textEdit.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); commitText(); } });
+textEdit.addEventListener('blur', () => commitText());
+function commitText() {
+  const t = editing; if (!t) return;
+  editing = null;
+  textEdit.style.display = 'none';
+  t.text = textEdit.value.replace(/\s+$/, '');
+  const before = t._before, fresh = t.fresh; delete t._before; delete t.fresh;
+  if (!t.text.trim()) {                          /* emptied: the box goes away */
+    const i = texts.indexOf(t); if (i >= 0) texts.splice(i, 1);
+    if (!fresh) record({type: 'text', item: t, before, after: null});
+  } else {
+    const after = {x: t.x, y: t.y, text: t.text, size: t.size, color: t.color};
+    if (fresh || JSON.stringify(before) !== JSON.stringify(after)) record({type: 'text', item: t, before, after});
+  }
+  redraw(); dirty();
+}
+document.getElementById('textBtn').onclick = () => setTool(tool === 'text' ? 'pen' : 'text');
 
 /* ============================================================
    THE TOOLBAR
@@ -837,12 +999,16 @@ const eraserBtn = document.getElementById('eraser');
 const selectBtn = document.getElementById('select');
 eraserBtn.onclick = () => setTool(tool === 'eraser' ? 'pen' : 'eraser');
 selectBtn.onclick = () => setTool(tool === 'select' ? 'pen' : 'select');
+const textBtn = document.getElementById('textBtn');
 function setTool(t) {
+  if (editing && t !== 'text') commitText();
   tool = t;
   eraserBtn.setAttribute('aria-pressed', t === 'eraser');
   selectBtn.setAttribute('aria-pressed', t === 'select');
+  textBtn.setAttribute('aria-pressed', t === 'text');
   cv.classList.toggle('erasing', t === 'eraser');
   cv.classList.toggle('selecting', t === 'select');
+  cv.classList.toggle('typing', t === 'text');
   if (t !== 'select') { lasso = null; setSelection(null); }
 }
 
@@ -868,13 +1034,20 @@ function apply(a, dir) {
   if (a.type === 'add')    { dir > 0 ? strokes.push(a.stroke) : remove(strokes, [a.stroke]); }
   if (a.type === 'erase')  { dir > 0 ? remove(strokes, a.strokes) : strokes.push(...a.strokes); }
   if (a.type === 'delete') {
-    if (dir > 0) { remove(strokes, a.sel.strokes); remove(aiMarks, a.sel.marks); remove(aiLines, a.sel.lines); }
-    else { strokes.push(...a.sel.strokes); aiMarks.push(...a.sel.marks); aiLines.push(...a.sel.lines); }
+    const tx = a.sel.texts || [];
+    if (dir > 0) { remove(strokes, a.sel.strokes); remove(aiMarks, a.sel.marks); remove(aiLines, a.sel.lines); remove(texts, tx); }
+    else { strokes.push(...a.sel.strokes); aiMarks.push(...a.sel.marks); aiLines.push(...a.sel.lines); texts.push(...tx); }
+  }
+  if (a.type === 'text') {                       /* a typed box appeared, changed, or was emptied */
+    const want = dir > 0 ? a.after : a.before;
+    if (want === null) remove(texts, [a.item]);
+    else { if (!texts.includes(a.item)) texts.push(a.item); Object.assign(a.item, want); }
   }
   if (a.type === 'move')   { shiftSelection(dir * a.dx, dir * a.dy, a.sel); }
 }
 document.getElementById('clear').onclick = () => {
-  strokes.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0; redoStack.length = 0;
+  if (editing) commitText();
+  strokes.length = 0; texts.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0; redoStack.length = 0;
   setSelection(null); say(''); showRead.hidden = true;
   dirty();
 };
@@ -916,13 +1089,10 @@ function snapshot({withAI = false} = {}) {
 }
 
 function bounds() {
-  if (!strokes.length) return null;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const s of strokes) for (const p of s.pts) {
-    if (p.x < minX) minX = p.x;  if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y;  if (p.y > maxY) maxY = p.y;
-  }
-  return {minX, minY, maxX, maxY};
+  let b = null;
+  for (const s of strokes) for (const p of s.pts) b = union(b, {minX: p.x, minY: p.y, maxX: p.x, maxY: p.y});
+  for (const t of texts) if (t.text.trim()) b = union(b, textBox(t));
+  return b;
 }
 const union = (a, b) => !a ? b : !b ? a : {minX: Math.min(a.minX, b.minX), minY: Math.min(a.minY, b.minY),
                                            maxX: Math.max(a.maxX, b.maxX), maxY: Math.max(a.maxY, b.maxY)};
@@ -1478,6 +1648,7 @@ function serialize() {
     id: current.id, notebook: current.notebook, section: current.section, title: titleEl.value,
     topic: topicEl.value, pan: {...pan}, zoom,
     strokes: strokes.map(s => ({color: s.color, width: s.width, pts: s.pts.map(p => ({x: p.x, y: p.y}))})),
+    texts: texts.filter(t => t.text.trim()).map(t => ({x: t.x, y: t.y, text: t.text, size: t.size, color: t.color})),
     aiMarks: aiMarks.map(m => ({x: m.x, y: m.y, size: m.size, text: m.text, shown: m.text.length})),
     aiLines: aiLines.map(l => ({x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, shown: 1})),
     chat: chat.map(m => ({role: m.role, text: m.text, board: !!m.board})),
@@ -1514,7 +1685,9 @@ async function openPage(rec, {quiet = false} = {}) {
   current = sheets.find(s => s.id === rec.id) || rec;
   current.exam = rec.exam || null;
   current.created = rec.created || rec.updated;
+  if (editing) commitText();
   strokes.length = 0; strokes.push(...(rec.strokes || []));
+  texts.length = 0;   texts.push(...(rec.texts || []));
   aiMarks.length = 0; aiMarks.push(...(rec.aiMarks || []));
   aiLines.length = 0; aiLines.push(...(rec.aiLines || []));
   chat.length = 0;    chat.push(...(rec.chat || []));
@@ -1651,6 +1824,7 @@ document.getElementById('pageAdd').onclick = () => {
    land on a NEW page in this section, in its ink, with room under each
    to work. Then it's Check my work, one problem at a time.
    ============================================================ */
+document.getElementById('examBtn2').onclick = () => document.getElementById('examBtn').onclick();
 document.getElementById('examBtn').onclick = async () => {
   const t = topic() || titleEl.value.trim();
   if (!t) return say("Type what you're working on in the topic line first.", true);
