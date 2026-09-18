@@ -52,5 +52,6 @@
       "name": "Study skills",
       "prompt": "Learning how to learn. METHOD: retrieval over rereading - make them answer from memory before showing anything. Space it: revisit tomorrow, then in three days. Interleave topics. Explain it back in their own words, and when they can't, that's the gap. WHAT STUDENTS GET WRONG HERE: highlighting and calling it studying; cramming; mistaking recognising an answer for recalling it; studying the easy parts. REAL PRACTICE: close the book and write what you remember; turn headings into questions; teach it to someone else."
     }
-  }
+  },
+  "review": "The student is reviewing what they have studied. Below is what their notebook says they covered, oldest first, with how long ago.\n\n--- WHAT THEY STUDIED ---\n{studied}\n--- END ---\n\nWrite {n} short recall questions that make them retrieve it from memory - not recognise it. Favour the older material and anything they struggled with. One question per line, numbered \"1.\" to \"{n}.\", no answers, no hints, plain text (for math write sqrt(x), x^2, (a/b) - no LaTeX). Mix: some ask for a definition in their own words, some ask them to work a small example, some ask why.\n\nAnswer as JSON, nothing else:\n{{\"say\": \"<one sentence: what this review covers>\", \"board\": \"<the numbered questions>\"}}"
 }
