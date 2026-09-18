@@ -1050,11 +1050,17 @@ function getCSS(name) {
 let lastPenAt = 0;       /* when the pen last touched — a palm lands right after */
 const PALM_MS = 1500;    /* a finger inside this window of pen contact is a palm */
 let penSeen = false;     /* once a real pen has touched, single fingers are palms, full stop */
+let drawingId = null;    /* the pointer that owns the stroke in progress */
+let penDown = false;     /* pen or mouse touched the paper and has not lifted (a cancel is not a lift) */
+
+/* Capture so the up still arrives if the pointer leaves the canvas. Only ever
+   for a pointer we intend to follow: capturing a palm we had already decided
+   to ignore made iPadOS fire pointercancel at the PEN, which is what cut
+   strokes in half. A pointer that is already gone throws here, and that must
+   not kill the stroke. */
+function capture(e) { try { cv.setPointerCapture(e.pointerId); } catch {} }
 
 cv.addEventListener('pointerdown', e => {
-  /* capture so the up arrives even if the pen crosses the edge; a pointer that
-     is already gone (or a synthetic one) throws here, and that must not kill the stroke */
-  try { cv.setPointerCapture(e.pointerId); } catch {}
   if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open'); progEl.classList.remove('on');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
@@ -1062,6 +1068,7 @@ cv.addEventListener('pointerdown', e => {
 
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
     if (penSeen && touches.size === 1) return;                                  /* also a palm */
+    capture(e);
     if (touches.size === 2) {                /* second finger: a pinch begins */
       const [a, b] = [...touches.values()];
       pinch = {dist: Math.hypot(a.x - b.x, a.y - b.y),
@@ -1074,7 +1081,13 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
 
+  capture(e);
+  penDown = true;
   lastPenAt = performance.now();
+  /* A stroke is still open from a pen-up that never arrived. Overwriting it
+     below would throw it away — it was only ever painted incrementally, and
+     the next redraw would erase it. Commit it first. */
+  if (drawing) commitStroke();
   if (e.pointerType === 'pen') { penSeen = true; if (currentTab !== 'draw' && tool === 'pen') showTab('draw'); }   /* OneNote does this too */
   panFrom = null; pinch = null; touches.clear();   /* pen wins over fingers */
 
@@ -1121,6 +1134,7 @@ cv.addEventListener('pointerdown', e => {
 
   /* pen pressure gives a live line width; a mouse reports 0, so fall back */
   drawing = {color: pen, width: penWidth(e) * (highlighter ? 4 : 1), pts: [pt(e)], alpha: highlighter ? .35 : 1};
+  drawingId = e.pointerId;
 });
 
 cv.addEventListener('pointermove', e => {
@@ -1162,6 +1176,18 @@ cv.addEventListener('pointermove', e => {
   }
   if (lasso) { lasso.push(pt(e)); return redraw(); }
   if (erasing) return eraseAt(pt(e));
+
+  /* The pen is DOWN and writing, but no stroke is open — iPadOS cancelled the
+     last one (a palm landing does it). Rather than throw the ink away until
+     he lifts and touches again, start a stroke here. `penDown` means the pen
+     touched THIS paper and has not lifted, so a Pencil sliding off a ribbon
+     button never inks; hover reports no buttons and no pressure, so it never
+     triggers either. */
+  if (!drawing && penDown && tool === 'pen' && ((e.buttons & 1) || e.pressure > 0)) {
+    drawing = {color: pen, width: penWidth(e) * (highlighter ? 4 : 1), pts: [pt(e)], alpha: highlighter ? .35 : 1};
+    drawingId = e.pointerId;
+    capture(e);
+  }
   if (!drawing) return;
 
   /* The Pencil samples far faster than the browser fires events; the
@@ -1199,6 +1225,9 @@ function done(e) {
     dirty();                                     /* pan/zoom are saved too */
     return;
   }
+  /* a second pointer's up must not commit the pen's stroke out from under it */
+  if (drawing && drawingId !== null && e.pointerId !== drawingId) return;
+  if (e.type === 'pointerup') penDown = false;     /* a cancel leaves it set: the pen may still be down */
   if (shaping) { shaping = null; }                 /* the shape is in `drawing`; it commits below */
   if (spacing) {
     if (spacing.dy) { record({type: 'move', sel: spacing.sel, dx: 0, dy: spacing.dy}); dirty(); }
@@ -1222,15 +1251,17 @@ function done(e) {
     erasing = null;
     return redraw();
   }
-  if (drawing) {
-    if (drawing.pts.length === 1) drawing.pts.push({...drawing.pts[0]});   /* a tap = a dot */
-    strokes.push(drawing);
-    record({type: 'add', stroke: drawing});
-    lastPenAt = performance.now();
-    dirty(); coachTick();
-  }
-  drawing = null;
+  if (drawing) commitStroke();
   redraw();
+}
+/* the open stroke joins the page — one undo step, one save */
+function commitStroke() {
+  if (drawing.pts.length === 1) drawing.pts.push({...drawing.pts[0]});   /* a tap = a dot */
+  strokes.push(drawing);
+  record({type: 'add', stroke: drawing});
+  lastPenAt = performance.now();
+  dirty(); coachTick();
+  drawing = null; drawingId = null;
 }
 cv.addEventListener('pointerup', done);
 cv.addEventListener('pointercancel', done);
