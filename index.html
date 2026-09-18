@@ -101,47 +101,62 @@
   #exportMenu.open { display: flex; }
   #exportMenu button { text-align: left; border: 0; }
 
-  /* ---- the page's name and what it's about, under the toolbar ---- */
+  /* ---- the page header, on the page like OneNote: big title, the date under it ---- */
   #meta {
-    position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 8px; width: min(560px, calc(100vw - 16px)); z-index: 19;
+    position: fixed; top: 66px; left: 28px; width: min(560px, calc(100vw - 56px)); z-index: 19;
+    display: flex; flex-direction: column; gap: 2px; pointer-events: none;
   }
-  #meta input {
-    flex: 1; min-width: 0; padding: 7px 12px; border-radius: 9px; font: inherit; font-size: 13.5px;
-    color: var(--text); background: var(--ui); border: 1px solid var(--edge);
-    -webkit-user-select: text; user-select: text;
-  }
-  #title { font-weight: 600; }
+  #meta input { pointer-events: auto; border: 0; background: transparent; font: inherit; color: var(--text); padding: 4px 6px; margin-left: -6px; border-radius: 6px;
+                -webkit-user-select: text; user-select: text; }
+  #meta input:focus { background: var(--ui); outline: 1px solid var(--edge); }
+  #title { font-size: 24px; font-weight: 700; line-height: 1.2; }
+  #pageDate { font-size: 12.5px; color: var(--muted); padding-left: 0; }
+  #topic { font-size: 13.5px; color: var(--muted); }
   #meta input::placeholder { color: var(--muted); font-weight: 400; }
 
   /* ============================================================
-     THE SIDEBAR — notebooks > sections > pages, like OneNote.
+     THE SIDEBAR — OneNote's three columns: notebook, sections, pages.
+     Sections carry a colour tab; pages show their title and date.
+     Open by default on a wide screen, an overlay on a narrow one.
      ============================================================ */
   #side {
-    position: fixed; top: 0; left: 0; bottom: 0; width: 268px; z-index: 30;
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(470px, 100vw); z-index: 30;
     background: var(--side); border-right: 1px solid var(--edge);
     transform: translateX(-100%); transition: transform .18s ease;
-    display: flex; flex-direction: column; padding: 14px 12px; gap: 10px;
+    display: flex; flex-direction: column;
     -webkit-user-select: text; user-select: text;
   }
   #side.open { transform: none; }
-  #side h3 { margin: 6px 0 2px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-  #side .row { display: flex; gap: 6px; align-items: center; }
-  #side select, #side input.new {
-    flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 6px 8px;
-    border: 1px solid var(--edge); border-radius: 8px; background: var(--ui); color: var(--text);
-  }
-  #side .list { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
+  #side .nb { display: flex; align-items: center; gap: 6px; padding: 14px 12px 10px; border-bottom: 1px solid var(--edge); }
+  #side .nb select { flex: 1; min-width: 0; font: inherit; font-size: 16px; font-weight: 700; padding: 6px 4px;
+                     border: 0; background: transparent; color: var(--text); appearance: none; -webkit-appearance: none; cursor: pointer; }
+  #side .cols { flex: 1; display: flex; min-height: 0; }
+  #side .col { display: flex; flex-direction: column; min-height: 0; }
+  #side .col.sections { width: 196px; border-right: 1px solid var(--edge); background: #efebe2; }
+  #side .col.pages { flex: 1; background: var(--side); }
+  #side .col h3 { margin: 10px 12px 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  #side .list { flex: 1; overflow: auto; padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; }
   #side .item {
     text-align: left; border: 1px solid transparent; background: transparent; color: var(--text); font: inherit; font-size: 14px;
-    padding: 7px 10px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px;
   }
-  #side .item:hover { background: #ebe6da; }
-  #side .item[aria-current="true"] { background: var(--ui); border-color: var(--edge); font-weight: 600; }
+  #side .item:hover { background: rgba(0,0,0,.05); }
+  #side .item[aria-current="true"] { background: var(--ui); border-color: var(--edge); }
+  #side .item .tab { width: 4px; height: 22px; border-radius: 2px; flex: none; }           /* the section colour */
+  #side .item .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #side .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #side .item .when { font-size: 12px; color: var(--muted); }
   #side .item .del { color: var(--muted); font-size: 12px; padding: 0 4px; }
   #side .item .del:hover { color: #a33; }
-  #side .pages { flex: 1; }
-  #side .foot { font-size: 12px; color: var(--muted); }
+  #side .col .add { margin: 6px 8px; text-align: left; }
+  #side input.new { margin: 6px 8px; font: inherit; font-size: 14px; padding: 7px 10px;
+                    border: 1px solid var(--edge); border-radius: 8px; background: var(--ui); color: var(--text); }
+  #side .foot { font-size: 12px; color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--edge); }
+
+  /* when the sidebar is open on a wide screen, the page's chrome moves right of it */
+  body.side-open #bar { left: calc(50% + 235px); }
+  body.side-open #meta { left: 496px; }
+  @media (max-width: 1099px) { body.side-open #bar { left: 50%; } body.side-open #meta { left: 28px; } }
 
   /* ============================================================
      THE CHAT — talk to the tutor. It sees the board every time.
@@ -216,10 +231,12 @@
 <div id="bar">
   <button class="act icon" id="sideBtn" title="Notebooks">☰</button>
   <div class="pens" id="pens"></div>
+  <button class="act" id="thick" title="Pen thickness">●</button>
   <button class="act" id="eraser" aria-pressed="false" title="Eraser — touch a stroke to remove it">Eraser</button>
   <button class="act" id="select" aria-pressed="false" title="Select — circle anything to move or delete it">Select</button>
   <div class="sep"></div>
   <button class="act" id="undo" title="Undo">Undo</button>
+  <button class="act" id="redo" title="Redo">Redo</button>
   <button class="act" id="clear" title="Clear the ink on this page (keeps the PDF)">Clear</button>
   <div class="sep"></div>
   <button class="act" id="pdfbtn" title="Put a PDF on this page to write on">PDF</button>
@@ -254,23 +271,30 @@
 </div>
 
 <div id="meta">
-  <input id="title" placeholder="Page title" autocomplete="off" spellcheck="false">
+  <input id="title" placeholder="Untitled page" autocomplete="off" spellcheck="false">
+  <div id="pageDate"></div>
   <input id="topic" placeholder="What are you working on? e.g. M220 — tangent lines" autocomplete="off" spellcheck="false">
 </div>
 
 <aside id="side">
-  <h3>Notebook</h3>
-  <div class="row">
-    <select id="nbSel"></select>
+  <div class="nb">
+    <select id="nbSel" title="Switch notebook"></select>
     <button class="act icon" id="nbAdd" title="New notebook">+</button>
+    <button class="act icon" id="sideClose" title="Hide">‹</button>
   </div>
-  <h3>Sections</h3>
-  <div class="list" id="secList"></div>
-  <div class="row"><input class="new" id="secNew" placeholder="New section… (Enter)"></div>
-  <h3>Pages</h3>
-  <div class="list pages" id="pageList"></div>
-  <div class="row"><button class="act" id="pageAdd" style="flex:1">+ New page</button></div>
-  <div class="row"><button class="act" id="examBtn" style="flex:1" title="A new page of practice problems on your topic">✎ Practice exam</button></div>
+  <div class="cols">
+    <div class="col sections">
+      <h3>Sections</h3>
+      <div class="list" id="secList"></div>
+      <input class="new" id="secNew" placeholder="New section… (Enter)">
+    </div>
+    <div class="col pages">
+      <h3>Pages</h3>
+      <div class="list" id="pageList"></div>
+      <button class="act add" id="pageAdd">+ Page</button>
+      <button class="act add" id="examBtn" title="A new page of practice problems on your topic">✎ Practice exam</button>
+    </div>
+  </div>
   <div class="foot" id="saveNote">Saved on this device</div>
 </aside>
 
@@ -318,7 +342,8 @@ const chat    = [];      /* [{role:'you'|'ai', text, board?}] — this page's co
 let pdfBytes  = null;    /* the PDF on this page, so it can be saved and re-rendered */
 
 let pen = PENS[0];
-let tool = 'pen';        /* 'pen' or 'eraser' */
+let thickness = 1;       /* pen size multiplier: fine .7 · medium 1 · bold 1.6 */
+let tool = 'pen';        /* 'pen', 'eraser' or 'select' */
 let drawing = null;      /* the stroke in progress */
 let erasing = null;      /* strokes removed during ONE eraser drag, for undo */
 let lasso = null;        /* the loop being drawn with the Select tool */
@@ -330,6 +355,8 @@ let moving = null;       /* {last:{x,y}, dx, dy} while dragging a selection */
      {type:'erase', strokes:[...]}   — one eraser drag removed these
    so undo can put back exactly what one gesture took away. */
 const history = [];
+const redoStack = [];    /* what undo took back; any new action clears it */
+function record(action) { history.push(action); redoStack.length = 0; }
 let pan = {x: 0, y: 0};  /* how far the board has been dragged */
 let zoom = 1;            /* 1 = life size; pinch or trackpad changes it */
 let panFrom = null;      /* where a finger-drag started */
@@ -495,7 +522,7 @@ let penSeen = false;     /* once a real pen has touched, single fingers are palm
 
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
-  sideEl.classList.remove('open'); exportMenu.classList.remove('open');   /* touching the paper closes menus */
+  if (!WIDE()) setSide(false); exportMenu.classList.remove('open');      /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
     if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;   /* a palm */
@@ -613,7 +640,7 @@ function done(e) {
     return;
   }
   if (moving) {                                    /* a move is one undo step */
-    if (moving.dx || moving.dy) { history.push({type: 'move', sel: selection, dx: moving.dx, dy: moving.dy}); dirty(); }
+    if (moving.dx || moving.dy) { record({type: 'move', sel: selection, dx: moving.dx, dy: moving.dy}); dirty(); }
     moving = null;
     return redraw();
   }
@@ -623,14 +650,14 @@ function done(e) {
     return redraw();
   }
   if (erasing) {                                   /* one drag = one undo step */
-    if (erasing.length) { history.push({type: 'erase', strokes: erasing}); dirty(); }
+    if (erasing.length) { record({type: 'erase', strokes: erasing}); dirty(); }
     erasing = null;
     return redraw();
   }
   if (drawing) {
     if (drawing.pts.length === 1) drawing.pts.push({...drawing.pts[0]});   /* a tap = a dot */
     strokes.push(drawing);
-    history.push({type: 'add', stroke: drawing});
+    record({type: 'add', stroke: drawing});
     lastPenAt = performance.now();
     dirty();
   }
@@ -738,7 +765,7 @@ function deleteSelection() {
   for (const s of sel.strokes) { const i = strokes.indexOf(s); if (i >= 0) strokes.splice(i, 1); }
   for (const m of sel.marks)   { const i = aiMarks.indexOf(m); if (i >= 0) aiMarks.splice(i, 1); }
   for (const l of sel.lines)   { const i = aiLines.indexOf(l); if (i >= 0) aiLines.splice(i, 1); }
-  history.push({type: 'delete', sel});
+  record({type: 'delete', sel});
   setSelection(null); dirty();
 }
 document.getElementById('selDelete').onclick = deleteSelection;
@@ -772,8 +799,20 @@ function zoomAt(sx, sy, z) {
 
 /* the point, in board space — pan and zoom undone, so ink lands where the pen is */
 const pt = e => ({x: (e.clientX - pan.x) / zoom, y: (e.clientY - pan.y) / zoom});
-const penWidth = e => (e.pressure > 0 && e.pointerType === 'pen')
-  ? 1.2 + e.pressure * 3.4 : 2.4;
+const penWidth = e => ((e.pressure > 0 && e.pointerType === 'pen')
+  ? 1.2 + e.pressure * 3.4 : 2.4) * thickness;
+
+/* pen thickness cycles fine -> medium -> bold, like OneNote's pen sizes */
+const THICK = [{k: .7, label: '·', name: 'fine'}, {k: 1, label: '●', name: 'medium'}, {k: 1.6, label: '⬤', name: 'bold'}];
+let thickI = 1;
+const thickBtn = document.getElementById('thick');
+thickBtn.onclick = () => {
+  thickI = (thickI + 1) % THICK.length;
+  thickness = THICK[thickI].k;
+  thickBtn.textContent = THICK[thickI].label;
+  thickBtn.title = 'Pen thickness: ' + THICK[thickI].name;
+  setTool('pen');
+};
 
 /* ============================================================
    THE TOOLBAR
@@ -811,22 +850,30 @@ function setTool(t) {
 document.getElementById('undo').onclick = () => {
   const last = history.pop();
   if (!last) return;
-  if (last.type === 'add') {
-    const i = strokes.indexOf(last.stroke);
-    if (i >= 0) strokes.splice(i, 1);
-  } else if (last.type === 'erase') {
-    strokes.push(...last.strokes);
-  } else if (last.type === 'delete') {          /* put back everything the lasso removed */
-    strokes.push(...last.sel.strokes); aiMarks.push(...last.sel.marks); aiLines.push(...last.sel.lines);
-  } else if (last.type === 'move') {            /* slide it back where it was */
-    shiftSelection(-last.dx, -last.dy, last.sel);
-  }
-  setSelection(null);
-  redraw();
-  dirty();
+  apply(last, -1);
+  redoStack.push(last);
+  setSelection(null); redraw(); dirty();
 };
+document.getElementById('redo').onclick = () => {
+  const next = redoStack.pop();
+  if (!next) return;
+  apply(next, +1);
+  history.push(next);
+  setSelection(null); redraw(); dirty();
+};
+/* apply an action forwards (+1, redo) or backwards (-1, undo) */
+function apply(a, dir) {
+  const remove = (list, items) => { for (const it of items) { const i = list.indexOf(it); if (i >= 0) list.splice(i, 1); } };
+  if (a.type === 'add')    { dir > 0 ? strokes.push(a.stroke) : remove(strokes, [a.stroke]); }
+  if (a.type === 'erase')  { dir > 0 ? remove(strokes, a.strokes) : strokes.push(...a.strokes); }
+  if (a.type === 'delete') {
+    if (dir > 0) { remove(strokes, a.sel.strokes); remove(aiMarks, a.sel.marks); remove(aiLines, a.sel.lines); }
+    else { strokes.push(...a.sel.strokes); aiMarks.push(...a.sel.marks); aiLines.push(...a.sel.lines); }
+  }
+  if (a.type === 'move')   { shiftSelection(dir * a.dx, dir * a.dy, a.sel); }
+}
 document.getElementById('clear').onclick = () => {
-  strokes.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0;
+  strokes.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0; redoStack.length = 0;
   setSelection(null); say(''); showRead.hidden = true;
   dirty();
 };
@@ -1143,7 +1190,9 @@ function aiBottom() {
 function write(text) {
   const box = bounds();
   const size = handSize();
-  const width = Math.max(320, box ? box.maxX - box.minX : 0);
+  let width = box ? box.maxX - box.minX : 0;
+  for (const m of aiMarks) width = Math.max(width, markBox(m).maxX - m.x);
+  width = Math.max(640, width);                    /* never a skinny column */
   const mark = {
     x: box ? box.minX : 60,
     y: Math.max(box ? box.maxY + size * 1.2 : 140, aiBottom() + size * 0.8),
@@ -1432,6 +1481,7 @@ function serialize() {
     aiLines: aiLines.map(l => ({x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, shown: 1})),
     chat: chat.map(m => ({role: m.role, text: m.text, board: !!m.board})),
     exam: current.exam || null,
+    created: current.created || Date.now(),
     pdf: pdfBytes,
     updated: Date.now(),
   };
@@ -1462,6 +1512,7 @@ async function openPage(rec, {quiet = false} = {}) {
 
   current = sheets.find(s => s.id === rec.id) || rec;
   current.exam = rec.exam || null;
+  current.created = rec.created || rec.updated;
   strokes.length = 0; strokes.push(...(rec.strokes || []));
   aiMarks.length = 0; aiMarks.push(...(rec.aiMarks || []));
   aiLines.length = 0; aiLines.push(...(rec.aiLines || []));
@@ -1482,7 +1533,7 @@ async function openPage(rec, {quiet = false} = {}) {
 }
 
 async function newPage(notebook, section, title) {
-  const rec = {id: uid(), notebook, section, title: title || 'Untitled page', topic: '',
+  const rec = {id: uid(), notebook, section, title: title || 'Untitled page', topic: '', created: Date.now(),
                strokes: [], aiMarks: [], aiLines: [], chat: [], pdf: null, pan: {x: 0, y: 0}, zoom: 1, updated: Date.now()};
   sheets.push(rec);
   await store.put(rec);
@@ -1493,20 +1544,37 @@ async function newPage(notebook, section, title) {
 /* ---- the sidebar ---- */
 const sideEl = document.getElementById('side');
 const nbSel = document.getElementById('nbSel');
-document.getElementById('sideBtn').onclick = () => sideEl.classList.toggle('open');
+const WIDE = () => innerWidth >= 1100;
+function setSide(open) {
+  sideEl.classList.toggle('open', open);
+  document.body.classList.toggle('side-open', open && WIDE());
+  redraw();
+}
+document.getElementById('sideBtn').onclick = () => setSide(!sideEl.classList.contains('open'));
+document.getElementById('sideClose').onclick = () => setSide(false);
+addEventListener('resize', () => document.body.classList.toggle('side-open', sideEl.classList.contains('open') && WIDE()));
+
+/* section colours, like OneNote's coloured tabs — stable per name */
+const SECTION_COLORS = ['#e8a33d', '#5b8def', '#d95f9a', '#5fb36b', '#a56cc1', '#e07b53', '#4bb3c9', '#c7b13f'];
+const sectionColor = name => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return SECTION_COLORS[h % SECTION_COLORS.length]; };
+const whenText = ts => { const d = new Date(ts); const today = new Date().toDateString() === d.toDateString();
+  return today ? d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) : d.toLocaleDateString([], {month: 'short', day: 'numeric'}); };
 
 function renderSide() {
   if (!current) return;
   const notebooks = [...new Set(sheets.map(s => s.notebook))].sort();
-  nbSel.innerHTML = notebooks.map(n => `<option${n === current.notebook ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  nbSel.innerHTML = notebooks.map(n => `<option${n === current.notebook ? ' selected' : ''}>${esc(n)} ▾</option>`).join('');
 
   const secs = [...new Set(sheets.filter(s => s.notebook === current.notebook).map(s => s.section))].sort();
   const secList = document.getElementById('secList');
   secList.innerHTML = '';
   for (const sec of secs) {
     const b = document.createElement('button');
-    b.className = 'item'; b.textContent = sec;
+    b.className = 'item';
     b.setAttribute('aria-current', sec === current.section);
+    const tab = document.createElement('span'); tab.className = 'tab'; tab.style.background = sectionColor(sec);
+    const name = document.createElement('span'); name.className = 'name'; name.textContent = sec;
+    b.append(tab, name);
     b.onclick = async () => {
       const first = sheets.filter(s => s.notebook === current.notebook && s.section === sec)
                           .sort((a, b) => b.updated - a.updated)[0];
@@ -1523,7 +1591,10 @@ function renderSide() {
     const b = document.createElement('button');
     b.className = 'item';
     b.setAttribute('aria-current', pg.id === current.id);
-    const name = document.createElement('span'); name.textContent = pg.title || 'Untitled page';
+    const body = document.createElement('span'); body.className = 'body';
+    const name = document.createElement('span'); name.className = 'name'; name.textContent = pg.title || 'Untitled page';
+    const when = document.createElement('span'); when.className = 'when'; when.textContent = whenText(pg.updated) + (pg.exam ? ' · practice exam' : '');
+    body.append(name, when);
     const del = document.createElement('span'); del.className = 'del'; del.textContent = '✕'; del.title = 'Delete this page';
     del.onclick = async ev => {
       ev.stopPropagation();
@@ -1532,10 +1603,16 @@ function renderSide() {
       await store.del(pg.id);
       if (pg.id === current.id) { current = null; await openPage(await fullRecord(pickStart())); } else renderSide();
     };
-    b.append(name, del);
+    b.append(body, del);
     b.onclick = async () => openPage(await fullRecord(pg));
     pageList.appendChild(b);
   }
+
+  /* the date under the title, the way OneNote stamps a page */
+  const d = new Date(current.created || current.updated || Date.now());
+  document.getElementById('pageDate').textContent =
+    d.toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'}) + '  ·  ' +
+    d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
 }
 const esc = s => s.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 
@@ -1545,7 +1622,7 @@ async function fullRecord(rec) {
 }
 
 nbSel.onchange = async () => {
-  const nb = nbSel.value;
+  const nb = nbSel.value.replace(/ ▾$/, '');
   const first = sheets.filter(s => s.notebook === nb).sort((a, b) => b.updated - a.updated)[0];
   if (first) await openPage(await fullRecord(first));
 };
@@ -1576,12 +1653,12 @@ document.getElementById('pageAdd').onclick = () => {
 document.getElementById('examBtn').onclick = async () => {
   const t = topic() || titleEl.value.trim();
   if (!t) return say("Type what you're working on in the topic line first.", true);
-  sideEl.classList.remove('open');
+  if (!WIDE()) setSide(false);
   say('Writing a practice exam on ' + t + '…');
   try {
     const r = await api('/chat', {image: null, context: t, messages: [{role: 'user', text:
       `Write a practice exam of 5 problems on: ${t}. Match the difficulty of a college homework set on this topic. ` +
-      `Put ALL five problems in "board", numbered "1." to "5.", ONE problem per line, plain-text math, NO solutions and NO hints. ` +
+      `Put ALL five problems in "board", numbered "1." to "5.", ONE problem per line, plain-text math (write sqrt(x), x^(-2), (a/b) — NO LaTeX, no backslashes), NO solutions and NO hints. ` +
       `In "say", one sentence telling me to work them on the page and check each one.`}]});
     const lines = (r.board || '').split('\n').map(l => l.trim()).filter(l => /^\d+[.)]/.test(l) || l.length > 3);
     if (!lines.length) throw new Error('no problems came back');
@@ -1633,6 +1710,7 @@ function busy(on, msg) {
   sheets = await store.all();
   if (!sheets.length) await newPage('My Notebook', 'Notes', 'Page 1');
   else await openPage(pickStart());
+  if (WIDE()) setSide(true);                         /* OneNote keeps its columns open on a wide screen */
 })();
 </script>
 </body>
