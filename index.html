@@ -317,6 +317,7 @@
   #settings p { margin: 0 0 10px; font-size: 13.5px; }
   #settings p.fine { font-size: 12.5px; color: var(--muted); }
   #settings a { color: var(--accent); }
+  #settings select { width: 100%; font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); color: var(--text); }
   #settings input { width: 100%; font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); color: var(--text); }
   #settings .row { display: flex; gap: 8px; margin-top: 10px; }
   #settings .row button { flex: 1; }
@@ -623,17 +624,26 @@
   <h2>Settings</h2>
   <label class="opt"><input type="checkbox" id="readingOpt"> <span><b>Reading mode</b> — a typeface made for dyslexia, wider letter and line spacing, a warmer page. Changes every word on screen, including the tutor's handwriting.</span></label>
   <label class="opt"><input type="checkbox" id="calcOpt" checked> <span><b>Calculator</b> — typing <code>3*(4+5) =</code> in a text box fills in the answer, and the tutor may do arithmetic. Turn it off to make the student do every number.</span></label>
-  <h2 style="margin-top:14px">Your own Gemini key</h2>
-  <p>Anyone with a Google account gets a free key in one tap at
+  <h2 style="margin-top:14px">Your own AI</h2>
+  <p>Showwork's shared key is Gemini, and it's free — a Google account gets you one in a tap at
      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
-     Paste it here and every check and chat runs on <b>your</b> free quota.</p>
-  <p class="fine">The key is kept only in this browser and sent straight to Google. It never touches Showwork's server.</p>
+     Bring your own and every check and chat runs on <b>your</b> account.</p>
+  <p class="fine">Keys are kept only in this browser and sent straight to the provider. They never touch Showwork's server.</p>
+  <div class="row" style="margin-bottom:8px">
+    <select id="providerSel">
+      <option value="gemini">Google Gemini — free tier</option>
+      <option value="anthropic">Anthropic Claude — API key</option>
+      <option value="openai">OpenAI — API key</option>
+      <option value="ollama">Ollama — on this machine</option>
+    </select>
+  </div>
   <input id="keyIn" type="password" placeholder="AIza…" autocomplete="off" spellcheck="false">
   <div class="row">
     <button class="act" id="keyClear">Remove</button>
     <button class="act primary" id="keySave">Save key</button>
   </div>
   <p class="fine" id="keyState"></p>
+  <p class="fine" id="providerNote"></p>
 </div>
 
 <div id="selBar">
@@ -1818,10 +1828,89 @@ async function post(path, body) {
    key, calls go to our server, on our quota, exactly as before.
    api() is the fork; everything above it can't tell the difference.
    ============================================================ */
-const G_MODEL = 'gemini-3.5-flash-lite';
-const JSON_MODE = {response_mime_type: 'application/json'};   /* valid JSON back, no fences, no bracket slips */
+/* ============================================================
+   THE PROVIDERS — one shape in, one shape out. Each entry turns our
+   {system, turns, image, wantJson} into that vendor's request and finds
+   the words in its reply. Adding a provider is adding an entry; nothing
+   above this line changes. All of them can SEE: reading handwriting is
+   the product, so a model without vision is not offered.
+   ============================================================ */
+const PROVIDERS = {
+  gemini: {
+    name: 'Google Gemini', model: 'gemini-3.5-flash-lite', keyPrefix: 'AIza',
+    where: 'aistudio.google.com/apikey', free: true,
+    url() { return `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`; },
+    headers: key => ({'Content-Type': 'application/json', 'x-goog-api-key': key}),
+    body({system, turns, image, wantJson}) {
+      const contents = turns.slice(0, -1).map(t => ({role: t.role === 'model' ? 'model' : 'user', parts: [{text: t.text}]}));
+      const last = turns[turns.length - 1], parts = [{text: last.text}];
+      if (image) parts.push(imgPart(image));
+      contents.push({role: 'user', parts});
+      const b = {contents};
+      if (system) b.system_instruction = {parts: [{text: system}]};
+      if (wantJson) b.generationConfig = JSON_MODE;
+      return b;
+    },
+    text: j => j.candidates[0].content.parts[0].text,
+  },
+  anthropic: {
+    name: 'Anthropic Claude', model: 'claude-sonnet-5', keyPrefix: 'sk-ant-',
+    where: 'console.anthropic.com', free: false,
+    url: () => 'https://api.anthropic.com/v1/messages',
+    headers: key => ({'Content-Type': 'application/json', 'x-api-key': key,
+                      'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'}),
+    body({system, turns, image, wantJson}) {
+      const msgs = turns.slice(0, -1).map(t => ({role: t.role === 'model' ? 'assistant' : 'user', content: t.text}));
+      const last = turns[turns.length - 1], content = [];
+      if (image) { const [head, b64] = image.split(',', 2);
+                   content.push({type: 'image', source: {type: 'base64', media_type: head.slice(5).split(';')[0] || 'image/png', data: b64}}); }
+      content.push({type: 'text', text: last.text + (wantJson ? '\n\nReply with JSON only.' : '')});
+      msgs.push({role: 'user', content});
+      return {model: this.model, max_tokens: 2048, system: system || undefined, messages: msgs};
+    },
+    text: j => j.content.map(c => c.text || '').join(''),
+  },
+  openai: {
+    name: 'OpenAI', model: 'gpt-6-astra', keyPrefix: 'sk-',
+    where: 'platform.openai.com/api-keys', free: false,
+    url: () => 'https://api.openai.com/v1/chat/completions',
+    headers: key => ({'Content-Type': 'application/json', Authorization: 'Bearer ' + key}),
+    body({system, turns, image, wantJson}) {
+      const msgs = system ? [{role: 'system', content: system}] : [];
+      for (const t of turns.slice(0, -1)) msgs.push({role: t.role === 'model' ? 'assistant' : 'user', content: t.text});
+      const last = turns[turns.length - 1];
+      msgs.push({role: 'user', content: image ? [{type: 'text', text: last.text}, {type: 'image_url', image_url: {url: image}}] : last.text});
+      const b = {model: this.model, messages: msgs, max_completion_tokens: 2048};
+      if (wantJson) b.response_format = {type: 'json_object'};
+      return b;
+    },
+    text: j => j.choices[0].message.content,
+  },
+  ollama: {
+    name: 'Ollama (this machine)', model: 'llama3.2-vision', keyPrefix: '', local: true,
+    where: 'ollama.com', free: true,
+    url: () => 'http://localhost:11434/api/chat',
+    headers: () => ({'Content-Type': 'application/json'}),
+    body({system, turns, image, wantJson}) {
+      const msgs = system ? [{role: 'system', content: system}] : [];
+      for (const t of turns.slice(0, -1)) msgs.push({role: t.role === 'model' ? 'assistant' : 'user', content: t.text});
+      const last = turns[turns.length - 1];
+      const m = {role: 'user', content: last.text};
+      if (image) m.images = [image.split(',', 2)[1]];
+      msgs.push(m);
+      return {model: this.model, messages: msgs, stream: false, format: wantJson ? 'json' : undefined};
+    },
+    text: j => j.message.content,
+  },
+};
+const JSON_MODE = {response_mime_type: 'application/json'};    /* Gemini: valid JSON back, no fences, no bracket slips */
+const providerId = () => { try { return localStorage.getItem('showwork.provider') || 'gemini'; } catch { return 'gemini'; } };
+const provider = () => PROVIDERS[providerId()] || PROVIDERS.gemini;
 let PROMPTS = null;                                  /* same prompts.json the servers use */
-const userKey = () => { try { return localStorage.getItem('showwork.key') || ''; } catch { return ''; } };
+const userKey = () => { try {
+  return localStorage.getItem('showwork.key:' + providerId()) ||
+         (providerId() === 'gemini' ? localStorage.getItem('showwork.key') || '' : '');   /* the pre-provider key */
+} catch { return ''; } };
 
 async function loadPrompts() {
   /* Two separate try blocks on purpose: a render error must NOT throw away the
@@ -1833,8 +1922,8 @@ async function loadPrompts() {
 }
 
 async function api(path, body) {
-  const key = userKey();
-  if (!key || !PROMPTS) return post(path, body);    /* no key: our server, as before */
+  const P = provider(), key = userKey();
+  if ((!key && !P.local) || !PROMPTS) return post(path, body);   /* no key of their own: our server, as before */
 
   const ctx  = (body.context || '').trim().slice(0, 300);
   let note = ctx ? PROMPTS.context_note.replace('{context}', ctx) : '';
@@ -1847,46 +1936,45 @@ async function api(path, body) {
   if ((body.learner || '').trim()) note += PROMPTS.learner_note.replace('{learner}', body.learner.trim().slice(0, 3000));
 
   if (path === '/transcribe') {
-    const text = await gemini(key, {contents: [{parts: [{text: note + PROMPTS.transcribe}, imgPart(body.image)]}]});
+    const text = await callModel(key, {turns: [{role: 'user', text: note + PROMPTS.transcribe}], image: body.image});
     return {transcription: text.trim(), checks_left: null};
   }
   if (path === '/check') {
     const prompt = body.mode === 'grade'
       ? PROMPTS.grade.replace('{work}', body.work).replace(/\{n\}/g, String(body.n || 5))
       : PROMPTS.check.replace('{work}', body.work);
-    const raw = await gemini(key, {contents: [{parts: [{text: note + prompt}, imgPart(body.image)]}], generationConfig: JSON_MODE});
+    const raw = await callModel(key, {turns: [{role: 'user', text: note + prompt}], image: body.image, wantJson: true});
     const v = looseJson(raw) || {line: '', problem: raw.trim(), nudge: '', all_correct: false};
     v.checks_left = null;
     return v;
   }
   /* /chat: alternating turns, the page's picture on the last one */
-  const msgs = body.messages;
-  const contents = msgs.slice(0, -1).map(m => ({role: m.role === 'model' ? 'model' : 'user', parts: [{text: m.text}]}));
-  const last = msgs[msgs.length - 1], parts = [{text: last.text}];
-  if (body.image) parts.push(imgPart(body.image));
-  contents.push({role: 'user', parts});
-  const raw = await gemini(key, {system_instruction: {parts: [{text: note + PROMPTS.chat}]}, contents, generationConfig: JSON_MODE});
+  const raw = await callModel(key, {system: note + PROMPTS.chat, turns: body.messages, image: body.image, wantJson: true});
   let say = raw.trim(), board = '', remember = '';
   const o = looseJson(raw);
   if (o) { say = String(o.say || ''); board = o.board ?? ''; remember = String(o.remember || '').slice(0, 200); }
   return {say, board, remember, checks_left: null};
 }
 
-/* the one place the browser talks to Gemini */
-async function gemini(key, reqBody) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${G_MODEL}:generateContent`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
-    body: JSON.stringify(reqBody),
-  });
+/* the one place the browser talks to whichever model the student chose */
+async function callModel(key, req) {
+  const P = provider();
+  let res;
+  try {
+    res = await fetch(P.url(), {method: 'POST', headers: P.headers(key), body: JSON.stringify(P.body(req))});
+  } catch (e) {
+    if (P.local) throw new Error("Can't reach Ollama. Start it with: OLLAMA_ORIGINS=* ollama serve");
+    throw new Error(`${P.name} unreachable: ${e.message}`);
+  }
   if (!res.ok) {
     const t = await res.text().catch(() => '');
-    if (res.status === 429) throw new Error('Your Gemini key is out of quota for now.');
-    if (res.status === 400 || res.status === 403) throw new Error('Google rejected that Gemini key — check it in ⚙.');
-    throw new Error(`Gemini ${res.status}: ${t.slice(0, 120)}`);
+    if (res.status === 429) throw new Error(`Your ${P.name} account is rate-limited or out of quota for now.`);
+    if (res.status === 401 || res.status === 403) throw new Error(`${P.name} rejected that key — check it in ⚙ Settings.`);
+    if (res.status === 400) throw new Error(`${P.name} refused the request: ${t.slice(0, 140)}`);
+    throw new Error(`${P.name} ${res.status}: ${t.slice(0, 120)}`);
   }
   const j = await res.json();
-  return j.candidates[0].content.parts[0].text;
+  try { return P.text(j); } catch { throw new Error(`${P.name} sent something unexpected back.`); }
 }
 const imgPart = url => {
   const [head, b64] = url.split(',', 2);
@@ -1920,22 +2008,35 @@ function looseJson(text) {
 /* ---- the settings panel ---- */
 const settingsEl = document.getElementById('settings');
 const keyIn = document.getElementById('keyIn');
-document.getElementById('setBtn').onclick = () => { settingsEl.classList.toggle('on'); keyIn.value = ''; keyState(); };
+const providerSel = document.getElementById('providerSel');
+document.getElementById('setBtn').onclick = () => { settingsEl.classList.toggle('on'); keyIn.value = ''; providerSel.value = providerId(); keyState(); };
+providerSel.onchange = () => {
+  try { localStorage.setItem('showwork.provider', providerSel.value); } catch {}
+  keyIn.value = ''; keyState();
+};
 document.getElementById('keySave').onclick = () => {
-  const k = keyIn.value.trim();
-  if (!/^AIza[\w-]{20,}$/.test(k)) return say('That does not look like a Gemini key (they start with AIza).', true);
-  try { localStorage.setItem('showwork.key', k); } catch { return say('This browser blocks storage; the key cannot be kept.', true); }
-  keyIn.value = ''; keyState(); settingsEl.classList.remove('on'); say('Using your Gemini key.');
+  const P = provider(), k = keyIn.value.trim();
+  if (P.local) return say(`${P.name} needs no key — just have it running.`, true);
+  if (!k || (P.keyPrefix && !k.startsWith(P.keyPrefix)))
+    return say(`That does not look like a ${P.name} key${P.keyPrefix ? ` (they start with ${P.keyPrefix})` : ''}.`, true);
+  try { localStorage.setItem('showwork.key:' + providerId(), k); } catch { return say('This browser blocks storage; the key cannot be kept.', true); }
+  keyIn.value = ''; keyState(); settingsEl.classList.remove('on'); say(`Using your ${P.name} key.`);
 };
 document.getElementById('keyClear').onclick = () => {
-  try { localStorage.removeItem('showwork.key'); } catch {}
-  keyState(); say('Back to Showwork\'s shared key.');
+  try { localStorage.removeItem('showwork.key:' + providerId()); if (providerId() === 'gemini') localStorage.removeItem('showwork.key'); } catch {}
+  keyState(); say("Back to Showwork's shared key.");
 };
 function keyState() {
-  const k = userKey();
-  document.getElementById('keyState').textContent = k
-    ? `A key ending in …${k.slice(-4)} is in use. Calls go straight from this browser to Google.`
-    : 'No key saved — checks and chat use Showwork\'s shared key, which has a daily limit.';
+  const P = provider(), k = userKey();
+  keyIn.placeholder = P.local ? 'no key needed' : (P.keyPrefix ? P.keyPrefix + '…' : 'your API key');
+  keyIn.disabled = !!P.local;
+  document.getElementById('keyState').textContent = P.local
+    ? `Calls go to ${P.model} on this machine. Nothing leaves it.`
+    : (k ? `A key ending in …${k.slice(-4)} is in use. Calls go straight from this browser to ${P.name}, never through our server.`
+         : `No ${P.name} key saved — checks and chat use Showwork's shared Gemini key, which has a daily limit.`);
+  document.getElementById('providerNote').textContent = P.local
+    ? `Run it with: OLLAMA_ORIGINS=* ollama serve — and pull a vision model (${P.model}).`
+    : `Get a key at ${P.where}.${P.free ? ' Free.' : ' Calls are billed to your account.'} Model: ${P.model}.`;
 }
 
 /* ============================================================
