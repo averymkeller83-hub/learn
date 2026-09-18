@@ -717,8 +717,9 @@ function strike([ymin, xmin, ymax, xmax]) {
   const a = toBoard(xmin, midY), b = toBoard(xmax, midY);
   const line = {x1: a.x - 6, y1: a.y + 3, x2: b.x + 6, y2: b.y - 3, shown: 0};   /* a slight tilt reads as a hand */
   aiLines.push(line);
-  const step = () => {
-    line.shown = Math.min(1, line.shown + 0.07);
+  const t0 = performance.now(), MS = 350;
+  const step = now => {
+    line.shown = Math.min(1, (now - t0) / MS);
     redraw();
     if (line.shown < 1) requestAnimationFrame(step);
   };
@@ -754,9 +755,12 @@ function write(text) {
   };
   aiMarks.push(mark);
 
-  const total = mark.text.length;
-  const step = () => {
-    mark.shown = Math.min(total, mark.shown + 2);
+  /* Paced by the clock, not the frame: ~45 characters a second, about
+     as fast as someone writes quickly. If the tab is throttled, the text
+     jumps ahead rather than crawling. */
+  const total = mark.text.length, CPS = 45, t0 = performance.now();
+  const step = now => {
+    mark.shown = Math.min(total, Math.floor((now - t0) / 1000 * CPS));
     redraw();
     if (mark.shown < total) requestAnimationFrame(step);
   };
