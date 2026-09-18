@@ -23,8 +23,10 @@ Run:  GEMINI_API_KEY=... python3 server.py     then open localhost:8000
 # IMPORTS — all built into Python, nothing to install
 # ============================================================
 import base64
+import html
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -145,7 +147,32 @@ class Board(SimpleHTTPRequestHandler):
         if path == "/prompts.json":                        # the browser needs them for bring-your-own-key
             self.path = "/prompts.json"
             return super().do_GET()
+        if path == "/fetch":                               # a linked web page, as readable text
+            return self.fetch_page(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("url", [""])[0])
         self.send_error(404)
+
+    # --------------------------------------------------------
+    # fetch_page — the browser can't read other sites (CORS), so
+    # we fetch a linked page here and hand back its text. http(s)
+    # only, no private hosts, capped, tags stripped.
+    # --------------------------------------------------------
+    def fetch_page(self, url):
+        u = urllib.parse.urlsplit(url)
+        host = (u.hostname or "").lower()
+        if u.scheme not in ("http", "https") or not host or host in ("localhost",) or \
+           host.startswith(("127.", "10.", "192.168.", "169.254.", "0.")) or host.endswith(".local"):
+            return self.reply(400, {"error": "bad_url", "message": "Only public http(s) links can be added."})
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Showwork source fetch)"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read(1_500_000).decode("utf-8", "replace")
+        except Exception as e:                      # noqa: BLE001 - surface it
+            return self.reply(502, {"error": "fetch_failed", "message": str(e)[:200]})
+        title = re.search(r"<title[^>]*>(.*?)</title>", raw, re.I | re.S)
+        text = re.sub(r"<(script|style|noscript)[^>]*>.*?</\1>", " ", raw, flags=re.I | re.S)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = html.unescape(re.sub(r"\s+", " ", text)).strip()
+        return self.reply(200, {"title": html.unescape(title.group(1)).strip() if title else url, "text": text[:400_000]})
 
     def log_message(self, fmt, *args):
         """Quieter log — one line per real request, not per favicon."""
@@ -203,6 +230,11 @@ class Board(SimpleHTTPRequestHandler):
         # ---- in FRONT of either prompt so the model isn't reading blind.      ----
         ctx = (data.get("context") or "").strip()[:300]
         note = PROMPTS["context_note"].replace("{context}", ctx) if ctx else ""
+        # ---- excerpts from the student's own textbooks, picked by the browser. They go ----
+        # ---- right after the topic, so the model teaches THEIR course, not a generic one. ----
+        src = (data.get("sources") or "").strip()[:9000]
+        if src:
+            note += PROMPTS["sources_note"].replace("{sources}", src)
 
         try:
             # ============================================

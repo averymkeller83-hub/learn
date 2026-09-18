@@ -249,6 +249,19 @@
     -webkit-user-select: text; user-select: text;
   }
   #settings.on { display: block; }
+  #sources { position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px));
+             max-height: calc(100vh - 160px); overflow: auto; background: var(--ui); border: 1px solid var(--edge); border-radius: 12px;
+             box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none; -webkit-user-select: text; user-select: text; }
+  #sources.on { display: block; }
+  #sources h2 { margin: 0 0 6px; font-size: 15px; } #sources h2 span { color: var(--muted); font-weight: 400; }
+  #sources p { margin: 0 0 10px; font-size: 13.5px; } #sources p.fine { font-size: 12.5px; color: var(--muted); }
+  #sources .list { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 12px; }
+  #sources .src { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--edge); border-radius: 8px; font-size: 13.5px; }
+  #sources .src .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #sources .src .meta { color: var(--muted); font-size: 12px; }
+  #sources .src .del { color: var(--muted); cursor: pointer; } #sources .src .del:hover { color: #a33; }
+  #sources .row { display: flex; gap: 8px; align-items: center; }
+  #sources .row input { flex: 1; min-width: 0; font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--edge); border-radius: 8px; background: var(--paper); color: var(--text); }
   #settings h2 { margin: 0 0 6px; font-size: 15px; }
   #settings p { margin: 0 0 10px; font-size: 13.5px; }
   #settings p.fine { font-size: 12.5px; color: var(--muted); }
@@ -455,6 +468,20 @@
 </div>
 <textarea id="textEdit" rows="1" spellcheck="false"></textarea>
 
+<div id="sources">
+  <h2>Textbooks &amp; sources <span id="srcFor"></span></h2>
+  <p>Attach the textbook chapters, slides or pages this notebook's class uses. The tutor reads the relevant passages
+     before every check, chat and practice exam, follows <b>their</b> definitions and notation, and cites them.</p>
+  <div class="list" id="srcList"></div>
+  <div class="row">
+    <button class="act" id="srcPdfBtn">+ PDF</button>
+    <input type="file" id="srcfile" accept="application/pdf" hidden>
+    <input id="srcUrl" placeholder="https://… (a web page)" autocomplete="off" spellcheck="false">
+    <button class="act primary" id="srcLinkBtn">+ Link</button>
+  </div>
+  <p class="fine" id="srcState">Indexed on this device only. Nothing is uploaded until a check or chat needs a passage.</p>
+</div>
+
 <div id="settings">
   <h2>Use your own Gemini key</h2>
   <p>Anyone with a Google account gets a free key in one tap at
@@ -489,6 +516,7 @@
   <div class="nb">
     <svg><use href="#i-book"/></svg>
     <select id="nbSel" title="Switch notebook"></select>
+    <button class="act icon" id="srcBtn" title="Textbooks &amp; sources for this notebook"><svg width="18" height="18" style="vertical-align:-3px"><use href="#f-document_add"/></svg></button>
     <button class="act icon" id="nbAdd" title="New notebook">+</button>
     <button class="act icon" id="sideClose" title="Hide">‹</button>
   </div>
@@ -767,7 +795,7 @@ cv.addEventListener('pointerdown', e => {
   /* capture so the up arrives even if the pen crosses the edge; a pointer that
      is already gone (or a synthetic one) throws here, and that must not kill the stroke */
   try { cv.setPointerCapture(e.pointerId); } catch {}
-  if (!WIDE()) setSide(false); exportMenu.classList.remove('open');      /* touching the paper closes menus */
+  if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
     if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;   /* a palm */
@@ -1358,7 +1386,7 @@ async function runCheck() {
   if (examOpen()) return runGrade();
   busy(true, 'Looking for the first thing to fix…');
   try {
-    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic()});
+    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600))});
     if (v.all_correct) {
       write("Nothing wrong here.\nThis is all correct.");
     } else {
@@ -1379,7 +1407,7 @@ async function runCheck() {
 async function runGrade() {
   busy(true, 'Grading…');
   try {
-    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), mode: 'grade', n: current.exam.n});
+    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), mode: 'grade', n: current.exam.n, sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600))});
     const results = Array.isArray(v.results) ? v.results : [];
     for (const r of results) if (!r.correct && Array.isArray(r.wrong_box) && r.wrong_box.length === 4) strike(r.wrong_box);
     const right = results.filter(r => r.correct).length;
@@ -1438,7 +1466,9 @@ async function api(path, body) {
   if (!key || !PROMPTS) return post(path, body);    /* no key: our server, as before */
 
   const ctx  = (body.context || '').trim().slice(0, 300);
-  const note = ctx ? PROMPTS.context_note.replace('{context}', ctx) : '';
+  let note = ctx ? PROMPTS.context_note.replace('{context}', ctx) : '';
+  const src = (body.sources || '').trim().slice(0, 9000);
+  if (src) note += PROMPTS.sources_note.replace('{sources}', src);
 
   if (path === '/transcribe') {
     const text = await gemini(key, {contents: [{parts: [{text: note + PROMPTS.transcribe}, imgPart(body.image)]}]});
@@ -1768,6 +1798,7 @@ document.getElementById('chatform').addEventListener('submit', async e => {
     const r = await api('/chat', {
       image: s ? s.url : null,
       context: topic(),
+      sources: sourcesFor(topic() + ' ' + text + ' ' + chat.slice(-3).map(m => m.text).join(' ')),
       messages: chat.slice(-16).map(m => ({role: m.role === 'you' ? 'user' : 'model', text: m.text})),
     });
     const shown = renderBoard(r.board);
@@ -1877,26 +1908,36 @@ document.getElementById('expNotebook').onclick = async () => {
    rest of the notebook never knows.
    ============================================================ */
 const store = (() => {
-  let db = null, memory = new Map();   /* memory: the fallback when IndexedDB is blocked */
+  let db = null;
+  const memory = {pages: new Map(), sources: new Map()};   /* the fallback when IndexedDB is blocked */
   const open = () => new Promise((res, rej) => {
     try {
-      const r = indexedDB.open('showwork', 1);
-      r.onupgradeneeded = () => r.result.createObjectStore('pages', {keyPath: 'id'});
+      const r = indexedDB.open('showwork', 2);
+      r.onupgradeneeded = () => {                  /* v1 had pages; v2 adds the textbooks */
+        const d = r.result;
+        if (!d.objectStoreNames.contains('pages')) d.createObjectStore('pages', {keyPath: 'id'});
+        if (!d.objectStoreNames.contains('sources')) d.createObjectStore('sources', {keyPath: 'id'});
+      };
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
     } catch (e) { rej(e); }
   });
-  const tx = (mode, fn) => new Promise((res, rej) => {
-    const t = db.transaction('pages', mode);
-    const rq = fn(t.objectStore('pages'));
+  const tx = (name, mode, fn) => new Promise((res, rej) => {
+    const t = db.transaction(name, mode);
+    const rq = fn(t.objectStore(name));
     t.oncomplete = () => res(rq && rq.result);
     t.onerror = () => rej(t.error);
   });
+  const table = name => ({
+    all()   { return db ? tx(name, 'readonly',  s => s.getAll())   : Promise.resolve([...memory[name].values()]); },
+    put(p)  { return db ? tx(name, 'readwrite', s => s.put(p))     : (memory[name].set(p.id, p), Promise.resolve()); },
+    del(id) { return db ? tx(name, 'readwrite', s => s.delete(id)) : (memory[name].delete(id), Promise.resolve()); },
+  });
+  const pagesT = table('pages');
   return {
     async init() { try { db = await open(); return true; } catch { db = null; return false; } },
-    all()   { return db ? tx('readonly',  s => s.getAll())   : Promise.resolve([...memory.values()]); },
-    put(p)  { return db ? tx('readwrite', s => s.put(p))     : (memory.set(p.id, p), Promise.resolve()); },
-    del(id) { return db ? tx('readwrite', s => s.delete(id)) : (memory.delete(id), Promise.resolve()); },
+    all: pagesT.all, put: pagesT.put, del: pagesT.del,
+    sources: table('sources'),
   };
 })();
 
@@ -1970,7 +2011,7 @@ async function openPage(rec, {quiet = false} = {}) {
     try { const img = await createImageBitmap(new Blob([q.bytes])); pics.push(q); pages.push({img, x: q.x, y: q.y, w: q.w, h: q.h, pic: true}); }
     catch (e) { say('Could not re-open a picture: ' + e.message, true); }
   }
-  applyExamState(); redraw(); renderChat(); renderSide();
+  applyExamState(); redraw(); renderChat(); renderSide(); renderSources();
   try { localStorage.setItem('showwork.last', current.id); } catch {}
 }
 
@@ -1982,6 +2023,109 @@ async function newPage(notebook, section, title) {
   await openPage(rec);
   titleEl.focus(); titleEl.select();
 }
+
+/* ============================================================
+   SOURCES — the textbooks a notebook's class actually uses.
+   A PDF's text (or a linked page's) is split into ~900-character
+   pieces and kept on this device. Before a check, chat or exam, the
+   pieces that best match the topic and the question are picked and
+   sent along, with the instruction to follow THEM - so the tutor
+   teaches this course's definitions and notation, and cites them.
+   ============================================================ */
+let sources = [];                                    /* every source, every notebook */
+const srcEl = document.getElementById('sources');
+
+function chunkText(text, page) {
+  const out = [], clean = text.replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < clean.length; ) {
+    let end = Math.min(clean.length, i + 900);
+    if (end < clean.length) { const cut = clean.lastIndexOf('. ', end); if (cut > i + 300) end = cut + 1; }
+    out.push({page, text: clean.slice(i, end).trim()});
+    i = end;
+  }
+  return out;
+}
+
+async function addPdfSource(file) {
+  say('Reading ' + file.name + '…');
+  if (!pdfjsLib) { pdfjsLib = await import(PDFJS_URL); pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; }
+  const doc = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+  const chunks = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    const tc = await (await doc.getPage(n)).getTextContent();
+    const text = tc.items.map(i => i.str).join(' ');
+    if (text.trim().length > 40) chunks.push(...chunkText(text, n));
+    if (n % 10 === 0) say(`Indexing ${file.name}… page ${n}/${doc.numPages}`);
+  }
+  if (!chunks.length) throw new Error('no readable text in that PDF (a scan needs OCR first)');
+  await saveSource({id: uid(), notebook: current.notebook, name: file.name.replace(/\.pdf$/i, ''), kind: 'pdf', pages: doc.numPages, chunks, added: Date.now()});
+}
+async function addLinkSource(url) {
+  say('Fetching the page…');
+  const r = await fetch('/fetch?url=' + encodeURIComponent(url));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.message || 'could not fetch that link');
+  const chunks = chunkText(data.text || '', null);
+  if (!chunks.length) throw new Error('that page had no readable text');
+  await saveSource({id: uid(), notebook: current.notebook, name: (data.title || url).slice(0, 80), kind: 'url', url, chunks, added: Date.now()});
+}
+async function saveSource(src) {
+  sources.push(src); await store.sources.put(src); renderSources();
+  say(`Added "${src.name}" — ${src.chunks.length} passages indexed.`);
+}
+
+/* the passages that best match what's being asked, as text for the prompt */
+function sourcesFor(query, maxChars = 7000) {
+  const mine = sources.filter(x => current && x.notebook === current.notebook);
+  if (!mine.length) return '';
+  const words = [...new Set((query || '').toLowerCase().match(/[a-z][a-z'-]{3,}/g) || [])];
+  if (!words.length) return '';
+  const scored = [];
+  for (const src of mine) for (const ch of src.chunks) {
+    const low = ch.text.toLowerCase();
+    let score = 0; for (const wd of words) if (low.includes(wd)) score += 1 + Math.min(3, (low.split(wd).length - 1) * 0.25);
+    if (score > 0) scored.push({score, src, ch});
+  }
+  scored.sort((a, b) => b.score - a.score);
+  let out = '', used = 0;
+  for (const {src, ch} of scored) {
+    const cite = `[${src.name}${ch.page ? ', p. ' + ch.page : ''}]`;
+    const piece = `${cite} ${ch.text}\n\n`;
+    if (used + piece.length > maxChars) break;
+    out += piece; used += piece.length;
+  }
+  return out.trim();
+}
+
+function renderSources() {
+  if (!current) return;
+  document.getElementById('srcFor').textContent = '· ' + current.notebook;
+  const mine = sources.filter(x => x.notebook === current.notebook);
+  const list = document.getElementById('srcList'); list.innerHTML = '';
+  if (!mine.length) { const e = document.createElement('div'); e.className = 'fine'; e.style.cssText = 'font-size:13px;color:var(--muted)'; e.textContent = 'No sources yet for this notebook.'; list.appendChild(e); }
+  for (const src of mine) {
+    const row = document.createElement('div'); row.className = 'src';
+    const ic = document.createElement('svg');
+    const name = document.createElement('span'); name.className = 'name'; name.textContent = (src.kind === 'pdf' ? '📕 ' : '🔗 ') + src.name;
+    const meta = document.createElement('span'); meta.className = 'meta'; meta.textContent = `${src.chunks.length} passages` + (src.pages ? ` · ${src.pages} pp` : '');
+    const del = document.createElement('span'); del.className = 'del'; del.textContent = '✕'; del.title = 'Remove';
+    del.onclick = async () => { sources = sources.filter(x => x.id !== src.id); await store.sources.del(src.id); renderSources(); };
+    row.append(name, meta, del); list.appendChild(row);
+  }
+  const n = mine.length;
+  document.getElementById('srcBtn').title = n ? `${n} source${n > 1 ? 's' : ''} for this notebook` : 'Textbooks & sources for this notebook';
+}
+document.getElementById('srcBtn').onclick = () => { srcEl.classList.toggle('on'); renderSources(); };
+document.getElementById('srcPdfBtn').onclick = () => document.getElementById('srcfile').click();
+document.getElementById('srcfile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { await addPdfSource(f); } catch (err) { say('Could not add that PDF: ' + err.message, true); }
+  e.target.value = '';
+});
+document.getElementById('srcLinkBtn').onclick = async () => {
+  const url = document.getElementById('srcUrl').value.trim(); if (!url) return;
+  try { await addLinkSource(url); document.getElementById('srcUrl').value = ''; } catch (err) { say('Could not add that link: ' + err.message, true); }
+};
 
 /* ---- the sidebar ---- */
 const sideEl = document.getElementById('side');
@@ -2099,7 +2243,7 @@ document.getElementById('examBtn').onclick = async () => {
   if (!WIDE()) setSide(false);
   say('Writing a practice exam on ' + t + '…');
   try {
-    const r = await api('/chat', {image: null, context: t, messages: [{role: 'user', text:
+    const r = await api('/chat', {image: null, context: t, sources: sourcesFor(t + ' practice questions exercises examples'), messages: [{role: 'user', text:
       `Write a practice exam of 5 questions on: ${t}. Match the difficulty of a college homework set on this topic. ` +
       `Put ALL five in "board" as ONE plain string, numbered "1." to "5.", ONE question per line, plain text (for math write sqrt(x), x^(-2), (a/b) — NO LaTeX, no backslashes), NO answers and NO hints. ` +
       `In "say", one sentence telling me to work them on the page and check each one.`}]});
@@ -2348,6 +2492,7 @@ redraw = function () { _redraw(); if (document.getElementById('zoomPct')) zoomLa
   const persistent = await store.init();
   if (!persistent) document.getElementById('saveNote').textContent = 'Storage is blocked here — this session won\'t be saved';
   sheets = await store.all();
+  try { sources = await store.sources.all(); } catch { sources = []; }
   if (!sheets.length) await newPage('My Notebook', 'Notes', 'Page 1');
   else await openPage(pickStart());
   if (WIDE()) setSide(true);                         /* OneNote keeps its columns open on a wide screen */

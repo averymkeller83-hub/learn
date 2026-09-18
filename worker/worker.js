@@ -33,6 +33,7 @@ export default {
       if (url.pathname === "/prompts.json") {     // the browser needs them for bring-your-own-key
         return new Response(JSON.stringify(prompts), { headers: { "Content-Type": "application/json" } });
       }
+      if (url.pathname === "/fetch") return fetchPage(url.searchParams.get("url") || "");
       return json(404, { error: "not_found" });
     }
 
@@ -55,7 +56,10 @@ export default {
 
     // what the student says they're working on — goes in FRONT of either prompt
     const ctx  = String(data.context || "").trim().slice(0, 300);
-    const note = ctx ? prompts.context_note.replace("{context}", ctx) : "";
+    let note = ctx ? prompts.context_note.replace("{context}", ctx) : "";
+    // excerpts from the student's own textbooks, picked by the browser
+    const src = String(data.sources || "").trim().slice(0, 9000);
+    if (src) note += prompts.sources_note.replace("{sources}", src);
 
     try {
       // ============================================
@@ -130,6 +134,26 @@ function chatBody(system, messages, b64, mime) {
   if (b64) parts.push({ inline_data: { mime_type: mime, data: b64 } });
   contents.push({ role: "user", parts });
   return { system_instruction: { parts: [{ text: system }] }, contents };
+}
+
+// a linked web page as readable text: the browser can't read other sites
+// (CORS), so we do. http(s) only, no private hosts, capped, tags stripped.
+async function fetchPage(target) {
+  let t;
+  try { t = new URL(target); } catch { return json(400, { error: "bad_url", message: "That is not a link." }); }
+  const host = t.hostname.toLowerCase();
+  if (!/^https?:$/.test(t.protocol) || host === "localhost" || /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host) || host.endsWith(".local"))
+    return json(400, { error: "bad_url", message: "Only public http(s) links can be added." });
+  let raw;
+  try {
+    const res = await fetch(t.href, { headers: { "User-Agent": "Mozilla/5.0 (Showwork source fetch)" }, redirect: "follow" });
+    if (!res.ok) return json(502, { error: "fetch_failed", message: `That page answered ${res.status}.` });
+    raw = (await res.text()).slice(0, 1_500_000);
+  } catch (e) { return json(502, { error: "fetch_failed", message: String(e.message).slice(0, 200) }); }
+  const title = (raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1];
+  let text = raw.replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const unesc = s => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+  return json(200, { title: title ? unesc(title.trim()) : target, text: unesc(text).slice(0, 400_000) });
 }
 
 // the one place that actually talks to Gemini
