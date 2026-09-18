@@ -247,6 +247,11 @@ class Board(SimpleHTTPRequestHandler):
         # ---- the calculator setting: may the tutor do the numbers, or must the student? ----
         if data.get("calc") in ("on", "off"):
             note += PROMPTS["calc_on_note" if data["calc"] == "on" else "calc_off_note"]
+        # ---- who the learner is: their level, and what the tutor has learned about them ----
+        if (data.get("level") or "").strip():
+            note += PROMPTS["level_note"].replace("{level}", str(data["level"]).strip()[:40])
+        if (data.get("learner") or "").strip():
+            note += PROMPTS["learner_note"].replace("{learner}", str(data["learner"]).strip()[:3000])
 
         try:
             # ============================================
@@ -262,9 +267,10 @@ class Board(SimpleHTTPRequestHandler):
                 try:
                     out = json.loads(strip_fence(raw))
                     say, board = str(out.get("say", "")), out.get("board", "") or ""   # a string or a list of steps
+                    remember = str(out.get("remember", "") or "")[:200]
                 except (ValueError, AttributeError):
-                    say, board = raw.strip(), ""
-                return self.reply(200, {"say": say, "board": board,
+                    say, board, remember = raw.strip(), "", ""
+                return self.reply(200, {"say": say, "board": board, "remember": remember,
                                         "checks_left": CHECK_BUDGET - Board.checks_used})
 
             # ============================================

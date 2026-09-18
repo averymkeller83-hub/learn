@@ -256,6 +256,11 @@
   #onenote { position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 160px); overflow: auto;
              background: var(--ui); border: 1px solid var(--edge); border-radius: 12px; box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none; -webkit-user-select: text; user-select: text; }
   #onenote.on { display: block; }
+  #teach { position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: var(--ui); border: 1px solid var(--edge);
+           border-radius: 12px; box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none; -webkit-user-select: text; user-select: text; }
+  #teach.on { display: block; } #teach h2 { margin: 0 0 6px; font-size: 16px; } #teach p.fine { margin: 0 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  #teach input, #teach select { font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); color: var(--text); }
+  #teach input { width: 100%; } #teach .row { display: flex; gap: 8px; } #teach .row select { flex: 1; } #teach .row button { flex: 1; }
   #onenote h2 { margin: 0 0 6px; font-size: 15px; } #onenote p { margin: 0 0 10px; font-size: 13.5px; } #onenote p.fine { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
   #onenote code { background: #efe9f5; padding: 0 4px; border-radius: 4px; }
   #onenote .row { display: flex; gap: 8px; align-items: center; } #onenote .row input { flex: 1; min-width: 0; font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--edge); border-radius: 8px; background: var(--paper); color: var(--text); }
@@ -354,12 +359,13 @@
   <symbol id="f-zoom_out" viewBox="0 0 24 24"><path d="M12.75 9.25a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1 0-1.5zM10 2a8 8 0 0 1 6.16 13.1l4.62 4.62a.75.75 0 0 1-1.06 1.06l-4.62-4.62A8 8 0 1 1 10 2m0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13"/></symbol>
   <symbol id="f-calculator" viewBox="0 0 24 24"><path d="M7 7c0-1.1.9-2 2-2h6a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2zm2-.5a.5.5 0 0 0-.5.5v1c0 .28.22.5.5.5h6a.5.5 0 0 0 .5-.5V7a.5.5 0 0 0-.5-.5zm-.75 8a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5m1.25 2.75a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0m6.25-2.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5M17 17.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0m-5-2.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5m1.25 2.75a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0M7.25 2A3.25 3.25 0 0 0 4 5.25v13.5C4 20.55 5.46 22 7.25 22h9.5c1.8 0 3.25-1.46 3.25-3.25V5.25C20 3.45 18.54 2 16.75 2zM5.5 5.25c0-.97.78-1.75 1.75-1.75h9.5c.97 0 1.75.78 1.75 1.75v13.5c0 .97-.78 1.75-1.75 1.75h-9.5c-.97 0-1.75-.78-1.75-1.75z"/></symbol>
   <symbol id="f-arrow_download" viewBox="0 0 24 24"><path d="M18.25 20.5a.75.75 0 1 1 0 1.5h-13a.75.75 0 1 1 0-1.5zm-6.6-18.49h.1c.38 0 .7.28.74.64l.01.1v13.7l3.72-3.73a.75.75 0 0 1 .98-.07l.08.07c.27.27.3.68.07.98l-.07.08-5 5a.75.75 0 0 1-.97.07l-.09-.07-5-5a.75.75 0 0 1 .98-1.13l.08.07L11 16.43V2.76c0-.38.28-.7.65-.75h.1z"/></symbol>
+  <symbol id="f-hat_graduation" viewBox="0 0 24 24"><path d="M9.9 3.7a3.9 3.9 0 0 1 4.2 0l8.05 5.17a.75.75 0 0 1 .01 1.26L19 12.19v5.56q0 .25-.15.45l-.01.02-.11.13q-.11.14-.32.33c-.28.27-.7.62-1.25.96A9.7 9.7 0 0 1 12 21a9.7 9.7 0 0 1-5.16-1.36 7 7 0 0 1-1.69-1.44 1 1 0 0 1-.15-.45V12.2l-2-1.3v5.36a.75.75 0 1 1-1.5 0V9.5q.02-.42.36-.64zm4.22 11.68a3.9 3.9 0 0 1-4.24 0l-3.38-2.2v4.29l.13.13q.31.32 1 .76A8 8 0 0 0 12 19.5a8 8 0 0 0 4.37-1.14 6 6 0 0 0 1.13-.89v-4.3zm-.84-10.42c-.78-.5-1.78-.5-2.56 0L3.63 9.51l7.07 4.62c.79.51 1.81.51 2.6 0l7.07-4.62z"/></symbol>
 </svg>
 
 <div id="ribbon">
   <div class="rtop">
     <button class="ibtn" id="sideBtn" title="Notebooks"><svg width="20" height="20"><use href="#f-navigation"/></svg></button>
-    <div class="app"><svg width="18" height="18"><use href="#f-notebook"/></svg>Showwork</div>
+    <div class="app" title="A free AI teacher that can see your notes"><svg width="18" height="18"><use href="#f-notebook"/></svg>Showwork</div>
     <div class="tabs" id="tabs">
       <button class="tab" data-tab="home" aria-selected="true">Home</button>
       <button class="tab" data-tab="insert">Insert</button>
@@ -371,6 +377,9 @@
   </div>
 
   <div class="rpanel" data-panel="home">
+    <div class="group">
+      <button class="rbtn" id="teachBtn" title="Learn something new — the tutor plans a lesson and teaches it step by step"><svg><use href="#f-hat_graduation"/></svg><span>Teach me…</span></button>
+    </div>
     <div class="group">
       <button class="rbtn" id="undo2"  title="Undo"><svg><use href="#f-arrow_undo"/></svg><span>Undo</span></button>
       <button class="rbtn" id="redo2"  title="Redo"><svg><use href="#f-arrow_redo"/></svg><span>Redo</span></button>
@@ -494,6 +503,17 @@
     <button class="act primary" id="srcLinkBtn">+ Link</button>
   </div>
   <p class="fine" id="srcState">Indexed on this device only. Nothing is uploaded until a check or chat needs a passage.</p>
+</div>
+
+<div id="teach">
+  <h2>What do you want to learn?</h2>
+  <p class="fine">Anything — long division, the French subjunctive, how a bill becomes law, Python loops, reading a guitar chord chart.
+     The tutor asks what you already know, puts a plan on the board, and teaches it one step at a time.</p>
+  <input id="teachTopic" placeholder="e.g. how to tell time on an analog clock" autocomplete="off">
+  <div class="row" style="margin-top:8px">
+    <select id="teachLevel"><option value="kid">I'm a kid</option><option value="teen">High school</option><option value="college" selected>College</option><option value="adult">Adult learner</option></select>
+    <button class="act primary" id="teachGo">Start the lesson</button>
+  </div>
 </div>
 
 <div id="onenote">
@@ -1600,6 +1620,8 @@ async function api(path, body) {
   const src = (body.sources || '').trim().slice(0, 9000);
   if (src) note += PROMPTS.sources_note.replace('{sources}', src);
   if (body.calc === 'on' || body.calc === 'off') note += PROMPTS[body.calc === 'on' ? 'calc_on_note' : 'calc_off_note'];
+  if ((body.level || '').trim()) note += PROMPTS.level_note.replace('{level}', body.level.trim().slice(0, 40));
+  if ((body.learner || '').trim()) note += PROMPTS.learner_note.replace('{learner}', body.learner.trim().slice(0, 3000));
 
   if (path === '/transcribe') {
     const text = await gemini(key, {contents: [{parts: [{text: note + PROMPTS.transcribe}, imgPart(body.image)]}]});
@@ -1621,9 +1643,9 @@ async function api(path, body) {
   if (body.image) parts.push(imgPart(body.image));
   contents.push({role: 'user', parts});
   const raw = await gemini(key, {system_instruction: {parts: [{text: note + PROMPTS.chat}]}, contents, generationConfig: JSON_MODE});
-  let say = raw.trim(), board = '';
-  try { const o = JSON.parse(stripFence(raw)); say = String(o.say || ''); board = o.board ?? ''; } catch {}
-  return {say, board, checks_left: null};
+  let say = raw.trim(), board = '', remember = '';
+  try { const o = JSON.parse(stripFence(raw)); say = String(o.say || ''); board = o.board ?? ''; remember = String(o.remember || '').slice(0, 200); } catch {}
+  return {say, board, remember, checks_left: null};
 }
 
 /* the one place the browser talks to Gemini */
@@ -2034,8 +2056,10 @@ document.getElementById('chatform').addEventListener('submit', async e => {
       context: topic(),
       sources: sourcesFor(topic() + ' ' + text + ' ' + chat.slice(-3).map(m => m.text).join(' ')),
       calc: calcOn() ? 'on' : 'off',
+      level: learnerLevel(), learner: learnerText(),
       messages: chat.slice(-16).map(m => ({role: m.role === 'you' ? 'user' : 'model', text: m.text})),
     });
+    if (r.remember) rememberAboutLearner(r.remember);
     if (typeof r.say === 'string' && /^\s*(```|\{)/.test(r.say)) {          /* a raw JSON reply that slipped through */
       try { const o = JSON.parse(stripFence(r.say)); r.say = String(o.say || ''); r.board = o.board ?? r.board; } catch {}
     }
@@ -2319,9 +2343,31 @@ async function saveSource(src) {
   say(`Added "${src.name}" — ${src.chunks.length} passages indexed.`);
 }
 
+/* ============================================================
+   THE LEARNER — what the tutor knows about this student, per
+   notebook: their level, and one-line notes the tutor adds as it
+   teaches ("solid on the power rule", "mixes up area and perimeter").
+   Sent with every chat so the tutor builds on what they've mastered.
+   ============================================================ */
+function learnerRec() {
+  let r = sources.find(x => x.kind === 'learner' && x.notebook === current.notebook);
+  if (!r) { r = {id: uid(), notebook: current.notebook, kind: 'learner', name: 'Tutor notes', level: '', notes: [], chunks: [], added: Date.now()}; sources.push(r); }
+  return r;
+}
+const learnerText = () => (learnerRec().notes || []).slice(-30).map(n => '- ' + n.text).join('\n');
+const learnerLevel = () => learnerRec().level || '';
+async function rememberAboutLearner(line) {
+  const t = String(line || '').trim(); if (!t || t.length < 4) return;
+  const r = learnerRec();
+  if ((r.notes || []).some(n => n.text.toLowerCase() === t.toLowerCase())) return;
+  r.notes = [...(r.notes || []), {when: Date.now(), text: t}].slice(-60);
+  await store.sources.put(r);
+}
+async function setLearnerLevel(level) { const r = learnerRec(); r.level = level; await store.sources.put(r); }
+
 /* the passages that best match what's being asked, as text for the prompt */
 function sourcesFor(query, maxChars = 7000) {
-  const mine = sources.filter(x => current && x.notebook === current.notebook);
+  const mine = sources.filter(x => current && x.notebook === current.notebook && x.kind !== 'learner');
   if (!mine.length) return '';
   const words = [...new Set((query || '').toLowerCase().match(/[a-z][a-z'-]{3,}/g) || [])];
   if (!words.length) return '';
@@ -2345,7 +2391,7 @@ function sourcesFor(query, maxChars = 7000) {
 function renderSources() {
   if (!current) return;
   document.getElementById('srcFor').textContent = '· ' + current.notebook;
-  const mine = sources.filter(x => x.notebook === current.notebook);
+  const mine = sources.filter(x => x.notebook === current.notebook && x.kind !== 'learner');
   const list = document.getElementById('srcList'); list.innerHTML = '';
   if (!mine.length) { const e = document.createElement('div'); e.className = 'fine'; e.style.cssText = 'font-size:13px;color:var(--muted)'; e.textContent = 'No sources yet for this notebook.'; list.appendChild(e); }
   for (const src of mine) {
@@ -2504,6 +2550,21 @@ async function onenotePageToRecord(html, notebook, section, pg) {
   if (!rec.texts.length && !rec.pics.length) push('(this page had no importable content — ink pages come through only as pictures)', 14);
   return rec;
 }
+/* Teach me…: a fresh page named for the topic, the level saved, and the lesson opened in the chat */
+const teachEl = document.getElementById('teach');
+document.getElementById('teachBtn').onclick = () => { teachEl.classList.toggle('on'); document.getElementById('teachLevel').value = learnerLevel() || 'college'; document.getElementById('teachTopic').focus(); };
+document.getElementById('teachTopic').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('teachGo').onclick(); });
+document.getElementById('teachGo').onclick = async () => {
+  const what = document.getElementById('teachTopic').value.trim(); if (!what) return say('Type what you want to learn.', true);
+  const level = document.getElementById('teachLevel').value;
+  teachEl.classList.remove('on'); document.getElementById('teachTopic').value = '';
+  await newPage(current.notebook, current.section, what.slice(0, 60));
+  await setLearnerLevel(level);
+  topicEl.value = what; dirty();
+  if (!chatEl.classList.contains('open')) chatBtn.onclick();
+  chatIn.value = `Teach me ${what}. My level: ${document.querySelector('#teachLevel option:checked').textContent.toLowerCase()}.`;
+  document.getElementById('chatform').requestSubmit();
+};
 document.getElementById('onenoteBtn').onclick = showOnenote;
 document.getElementById('onClose').onclick = () => onEl.classList.remove('on');
 document.getElementById('msSave').onclick = () => {

@@ -62,6 +62,9 @@ export default {
     if (src) note += prompts.sources_note.replace("{sources}", src);
     // the calculator setting: may the tutor do the numbers, or must the student?
     if (data.calc === "on" || data.calc === "off") note += prompts[data.calc === "on" ? "calc_on_note" : "calc_off_note"];
+    // who the learner is: their level, and what the tutor has learned about them
+    if (String(data.level || "").trim()) note += prompts.level_note.replace("{level}", String(data.level).trim().slice(0, 40));
+    if (String(data.learner || "").trim()) note += prompts.learner_note.replace("{learner}", String(data.learner).trim().slice(0, 3000));
 
     try {
       // ============================================
@@ -72,9 +75,9 @@ export default {
         const msgs = (Array.isArray(data.messages) ? data.messages : []).slice(-16);
         if (!msgs.length) return json(400, { error: "no_message", message: "Say something first." });
         const raw = await askGemini(env, chatBody(note + prompts.chat, msgs, b64, mime));
-        let say = raw.trim(), board = "";
-        try { const out = JSON.parse(stripFence(raw)); say = String(out.say || ""); board = out.board ?? ""; } catch {}   // string or a list of steps
-        return json(200, { say, board, checks_left: null });
+        let say = raw.trim(), board = "", remember = "";
+        try { const out = JSON.parse(stripFence(raw)); say = String(out.say || ""); board = out.board ?? ""; remember = String(out.remember || "").slice(0, 200); } catch {}
+        return json(200, { say, board, remember, checks_left: null });
       }
 
       // ============================================
