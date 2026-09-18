@@ -1598,7 +1598,7 @@ function write(text) {
   const size = handSize();
   let width = box ? box.maxX - box.minX : 0;
   for (const m of aiMarks) width = Math.max(width, markBox(m).maxX - m.x);
-  width = Math.max(640, width);                    /* never a skinny column */
+  width = Math.min(visibleWidth(), Math.max(640, width));   /* never a skinny column, never under a panel */
   const o = visibleOrigin();
   const mark = {
     x: box ? box.minX : o.x,
@@ -1634,7 +1634,7 @@ function renderBoard(board) {
   let b = bounds(); for (const m of aiMarks) b = union(b, markBox(m));
   const o = visibleOrigin();
   const x0 = b ? b.minX : o.x;
-  const W = Math.max(640, b ? b.maxX - b.minX : 0), H = Math.min(520, Math.max(240, W * 0.5));
+  const W = Math.min(visibleWidth(), Math.max(640, b ? b.maxX - b.minX : 0)), H = Math.min(520, Math.max(240, W * 0.5));
   let y0 = Math.max(b ? b.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8);   /* top of the current sketch area */
   let sketching = false, shown = false;
   const P = xy => ({x: x0 + (Math.max(0, Math.min(100, +xy[0] || 0)) / 100) * W,
@@ -2477,6 +2477,13 @@ document.getElementById('fmtNumbers').onclick   = () => fmt(t => prefixLines(t, 
 document.getElementById('tagTodo').onclick      = () => fmt(t => prefixLines(t, ln => '☐ ' + ln));
 document.getElementById('tagStar').onclick      = () => fmt(t => prefixLines(t, ln => '★ ' + ln));
 document.getElementById('tagQ').onclick         = () => fmt(t => prefixLines(t, ln => '? ' + ln));
+
+/* the width of the page you can see, in board units: minus the sidebar and the chat panel */
+function visibleWidth() {
+  const left = sideEl.classList.contains('open') && WIDE() ? 470 : 0;
+  const right = chatEl.classList.contains('open') && innerWidth > 900 ? Math.min(360, innerWidth) : 0;
+  return Math.max(320, innerWidth - left - right - 80) / zoom;
+}
 
 /* the top-left of the visible page (right of the sidebar, under the ribbon and header), in board coordinates */
 function visibleOrigin() {
