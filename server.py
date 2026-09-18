@@ -70,13 +70,16 @@ def ask_vision(prompt, img_bytes, mime="image/png"):
     """Send one image and one question. Get words back."""
 
     # ---- the picture rides as base64 text inside the JSON ----
-    body = json.dumps({"contents": [{"parts": [
+    return ask({"contents": [{"parts": [
         {"text": prompt},
         {"inline_data": {"mime_type": mime,
                          "data": base64.b64encode(img_bytes).decode()}},
     ]}]})
 
-    req = urllib.request.Request(ASK_URL, data=body.encode(), headers={
+
+def ask(body):
+    """The one place that actually talks to Gemini. IN: a request body. OUT: words."""
+    req = urllib.request.Request(ASK_URL, data=json.dumps(body).encode(), headers={
         "Content-Type": "application/json", "x-goog-api-key": API_KEY})
 
     with urllib.request.urlopen(req, timeout=60) as resp:
@@ -84,6 +87,27 @@ def ask_vision(prompt, img_bytes, mime="image/png"):
 
     # ---- dig the words out of Gemini's nesting ----
     return answer["candidates"][0]["content"]["parts"][0]["text"]
+
+
+# ============================================================
+# chat_body — a conversation, not a single question. Gemini wants
+# turns that alternate user / model; ours do, because the board only
+# stores what was said. The page's picture rides with the LAST turn,
+# and the tutor's standing instructions go in system_instruction.
+# IN: the system prompt, [{role, text}], and maybe an image.
+# ============================================================
+def chat_body(system, messages, img_bytes=None, mime="image/png"):
+    contents = []
+    for m in messages[:-1]:
+        role = "model" if m.get("role") == "model" else "user"
+        contents.append({"role": role, "parts": [{"text": m.get("text", "")}]})
+    last = messages[-1] if messages else {"text": ""}
+    parts = [{"text": last.get("text", "")}]
+    if img_bytes:
+        parts.append({"inline_data": {"mime_type": mime,
+                                      "data": base64.b64encode(img_bytes).decode()}})
+    contents.append({"role": "user", "parts": parts})
+    return {"system_instruction": {"parts": [{"text": system}]}, "contents": contents}
 
 
 # ============================================================
@@ -138,7 +162,7 @@ class Board(SimpleHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_POST(self):
-        if self.path not in ("/transcribe", "/check"):
+        if self.path not in ("/transcribe", "/check", "/chat"):
             return self.reply(404, {"error": "no such endpoint"})
 
         # ---- the guard rail: no key, no calls, and SAY so. A demo ----
@@ -155,13 +179,18 @@ class Board(SimpleHTTPRequestHandler):
                 "error": "out_of_checks",
                 "message": "Out of checks for now. The board still works."})
 
-        # ---- read the request: {"image": "data:image/png;base64,..."} ----
+        # ---- read the request: {"image": "data:image/jpeg;base64,...", ...} ----
+        # ---- the picture is required for transcribe/check, optional for chat ----
         length = int(self.headers.get("Content-Length", 0))
         try:
             data = json.loads(self.rfile.read(length))
-            head, b64 = data["image"].split(",", 1)          # "data:image/jpeg;base64"
-            mime = head[5:].split(";")[0] or "image/png"      # the board sends JPEG now
-            png = base64.b64decode(b64)
+            png, mime = None, "image/png"
+            if data.get("image"):
+                head, b64 = data["image"].split(",", 1)      # "data:image/jpeg;base64"
+                mime = head[5:].split(";")[0] or "image/png"  # the board sends JPEG
+                png = base64.b64decode(b64)
+            elif self.path != "/chat":
+                raise KeyError("image")
         except (ValueError, KeyError, IndexError) as e:
             return self.reply(400, {"error": "bad_request", "message": str(e)})
 
@@ -173,6 +202,24 @@ class Board(SimpleHTTPRequestHandler):
         note = PROMPTS["context_note"].replace("{context}", ctx) if ctx else ""
 
         try:
+            # ============================================
+            # /chat — the tutor, looking at the page.
+            # Asks for JSON {say, board}; if the model rambles,
+            # the ramble becomes what it says.
+            # ============================================
+            if self.path == "/chat":
+                msgs = [m for m in (data.get("messages") or []) if isinstance(m, dict)][-16:]
+                if not msgs:
+                    return self.reply(400, {"error": "no_message", "message": "Say something first."})
+                raw = ask(chat_body(note + PROMPTS["chat"], msgs, png, mime))
+                try:
+                    out = json.loads(strip_fence(raw))
+                    say, board = str(out.get("say", "")), str(out.get("board", "") or "")
+                except (ValueError, AttributeError):
+                    say, board = raw.strip(), ""
+                return self.reply(200, {"say": say, "board": board,
+                                        "checks_left": CHECK_BUDGET - Board.checks_used})
+
             # ============================================
             # /transcribe — "what does this say?"
             # ============================================

@@ -33,7 +33,7 @@ export default {
       return json(404, { error: "not_found" });
     }
 
-    if (request.method !== "POST" || !["/transcribe", "/check"].includes(url.pathname)) {
+    if (request.method !== "POST" || !["/transcribe", "/check", "/chat"].includes(url.pathname)) {
       return json(404, { error: "no such endpoint" });
     }
 
@@ -45,15 +45,29 @@ export default {
     // ---- read {"image": "data:image/png;base64,...", "work"?: "..."} ----
     let data;
     try { data = await request.json(); } catch { return json(400, { error: "bad_request", message: "not JSON" }); }
+    // the picture is required for transcribe/check, optional for chat
     const [head, b64] = (data.image || "").split(",", 2);   // "data:image/jpeg;base64"
-    if (!b64) return json(400, { error: "bad_request", message: "no image" });
-    const mime = head.slice(5).split(";")[0] || "image/png"; // the board sends JPEG now
+    if (!b64 && url.pathname !== "/chat") return json(400, { error: "bad_request", message: "no image" });
+    const mime = b64 ? (head.slice(5).split(";")[0] || "image/png") : "image/png";
 
     // what the student says they're working on — goes in FRONT of either prompt
     const ctx  = String(data.context || "").trim().slice(0, 300);
     const note = ctx ? prompts.context_note.replace("{context}", ctx) : "";
 
     try {
+      // ============================================
+      // /chat — the tutor, looking at the page. Asks for
+      // JSON {say, board}; a ramble becomes what it says.
+      // ============================================
+      if (url.pathname === "/chat") {
+        const msgs = (Array.isArray(data.messages) ? data.messages : []).slice(-16);
+        if (!msgs.length) return json(400, { error: "no_message", message: "Say something first." });
+        const raw = await askGemini(env, chatBody(note + prompts.chat, msgs, b64, mime));
+        let say = raw.trim(), board = "";
+        try { const out = JSON.parse(stripFence(raw)); say = String(out.say || ""); board = String(out.board || ""); } catch {}
+        return json(200, { say, board, checks_left: null });
+      }
+
       // ============================================
       // /transcribe — "what does this say?"
       // ============================================
@@ -93,13 +107,30 @@ export default {
 // IN: env (for the key), a prompt, the PNG as base64.  OUT: words.
 // ============================================================
 async function askVision(env, prompt, b64, mime = "image/png") {
+  return askGemini(env, { contents: [{ parts: [
+    { text: prompt },
+    { inline_data: { mime_type: mime, data: b64 } },
+  ]}]});
+}
+
+// a conversation: alternating user/model turns, the page's picture on the
+// LAST turn, the tutor's standing instructions as system_instruction
+function chatBody(system, messages, b64, mime) {
+  const contents = messages.slice(0, -1).map(m => ({
+    role: m.role === "model" ? "model" : "user", parts: [{ text: String(m.text || "") }] }));
+  const last = messages[messages.length - 1] || { text: "" };
+  const parts = [{ text: String(last.text || "") }];
+  if (b64) parts.push({ inline_data: { mime_type: mime, data: b64 } });
+  contents.push({ role: "user", parts });
+  return { system_instruction: { parts: [{ text: system }] }, contents };
+}
+
+// the one place that actually talks to Gemini
+async function askGemini(env, body) {
   const res = await fetch(ASK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-    body: JSON.stringify({ contents: [{ parts: [
-      { text: prompt },
-      { inline_data: { mime_type: mime, data: b64 } },
-    ]}]}),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);

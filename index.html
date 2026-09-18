@@ -1,17 +1,23 @@
 <!DOCTYPE html>
 <!--
-  Showwork — the board.
+  Showwork — a notebook you handwrite in, with a tutor built in.
 
-  THE WHOLE PAGE IN FOUR STEPS:
-    1. You write on the canvas. Pen and mouse draw; fingers pan, never draw.
-    2. "Check my work" sends a picture of the board to our own server.
-    3. The server reads it back to you. YOU fix the reading if it got it wrong.
-    4. Only then does it mark the FIRST mistake — written onto the board,
-       stroke by stroke, in its own reserved colour.
+  THE WHOLE PAGE IN SIX STEPS:
+    1. Notebooks hold sections, sections hold pages. Every page is a board.
+       Everything you do is saved on this device as you do it.
+    2. You write on the board. Pen and mouse draw; fingers pan and zoom, never draw.
+    3. "Check my work" sends a picture of the page to our own server. It reads
+       your handwriting and — if it wasn't sure of something — asks you first.
+    4. Then it finds the FIRST mistake, crosses it out where it sits, and writes
+       how to do that one step, in its own reserved colour, at your size.
+    5. The chat sees the same picture. Talk to it; it can ask you questions
+       back, and when it wants to SHOW you something it writes on the board.
+    6. Export hands a page (image) or a notebook (PDF) to the share sheet —
+       OneNote, Google Drive, Files, AirDrop — or downloads it on a desktop.
 
-  Step 3 is the point of the whole thing. A tutor that confidently misreads
-  your work and corrects you for a mistake you never made is worse than no
-  tutor at all. So it never tutors on a reading you haven't confirmed.
+  The reading-back step exists because on 2026-09-17 two of three readers misread
+  the same handwritten fraction. A tutor that confidently misreads your work and
+  corrects you for a mistake you never made is worse than no tutor at all.
 -->
 <html lang="en">
 <head>
@@ -21,8 +27,8 @@
 <style>
   /* ============================================================
      THE PALETTE — muted, paper-like. The AI's amber is reserved:
-     it is never offered in the student's pen colours, so its marks
-     can never be mistaken for theirs.
+     it is never offered as a pen colour, so its marks can never be
+     mistaken for the student's.
      ============================================================ */
   :root {
     --paper:   #fbfaf7;
@@ -33,6 +39,7 @@
     --muted:   #7a746a;
     --ai-ink:  #c2410c;   /* RESERVED. Never a student colour. */
     --accent:  #3f5d52;
+    --side:    #f4f1ea;
   }
 
   * { box-sizing: border-box; }
@@ -41,7 +48,6 @@
     margin: 0; height: 100%; overflow: hidden;
     background: var(--paper); color: var(--text);
     font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
-    /* fingers must never scroll the page — the canvas handles them */
     overscroll-behavior: none; touch-action: none;
     -webkit-user-select: none; user-select: none;
   }
@@ -49,89 +55,135 @@
   /* ---- the board fills everything; the UI floats over it ---- */
   #board { position: fixed; inset: 0; display: block; cursor: crosshair; touch-action: none;
            -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #board.erasing { cursor: cell; }
 
   /* ============================================================
      THE TOOLBAR — one row, no modes to learn. Pick up a pen, write.
      ============================================================ */
   #bar {
-    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
-    display: flex; align-items: center; gap: 14px;
-    padding: 9px 14px; border-radius: 12px;
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 12px;
     background: var(--ui); border: 1px solid var(--edge);
     box-shadow: 0 2px 14px rgba(0,0,0,.07);
-    z-index: 10; max-width: calc(100vw - 24px);
+    z-index: 20; max-width: calc(100vw - 16px); overflow-x: auto;
   }
-
   .pens { display: flex; gap: 7px; }
   .pen {
     width: 26px; height: 26px; border-radius: 50%;
-    border: 2px solid transparent; cursor: pointer; padding: 0;
+    border: 2px solid transparent; cursor: pointer; padding: 0; flex: none;
   }
   .pen[aria-pressed="true"] { border-color: var(--accent); transform: scale(1.12); }
-
-  .sep { width: 1px; height: 24px; background: var(--edge); }
-
-  /* the eraser is a toggle: pressed = every pen or mouse stroke erases */
-  button.act[aria-pressed="true"] { background: #ebe6da; border-color: var(--accent); }
-  #board.erasing { cursor: cell; }
+  .sep { width: 1px; height: 24px; background: var(--edge); flex: none; }
 
   button.act {
     border: 1px solid var(--edge); background: var(--ui); color: var(--text);
-    border-radius: 8px; padding: 7px 13px; cursor: pointer; font-size: 14px;
-    font-family: inherit;
+    border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 14px;
+    font-family: inherit; white-space: nowrap; flex: none;
   }
   button.act:hover:not(:disabled) { background: #f4f1ea; }
   button.act:disabled { opacity: .45; cursor: not-allowed; }
-  button.primary {
-    background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
-  }
+  button.act[aria-pressed="true"] { background: #ebe6da; border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
   button.primary:hover:not(:disabled) { background: #354f45; }
+  button.icon { padding: 7px 10px; font-size: 16px; line-height: 1; }
+
+  /* the export menu drops from its button */
+  #exportMenu { position: fixed; z-index: 21; display: none; flex-direction: column; gap: 4px; padding: 6px;
+                background: var(--ui); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.09); }
+  #exportMenu.open { display: flex; }
+  #exportMenu button { text-align: left; border: 0; }
+
+  /* ---- the page's name and what it's about, under the toolbar ---- */
+  #meta {
+    position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; width: min(560px, calc(100vw - 16px)); z-index: 19;
+  }
+  #meta input {
+    flex: 1; min-width: 0; padding: 7px 12px; border-radius: 9px; font: inherit; font-size: 13.5px;
+    color: var(--text); background: var(--ui); border: 1px solid var(--edge);
+    -webkit-user-select: text; user-select: text;
+  }
+  #title { font-weight: 600; }
+  #meta input::placeholder { color: var(--muted); font-weight: 400; }
 
   /* ============================================================
-     THE READ-BACK PANEL — "here is what I read."
-     The student owns this text. They can fix any of it.
+     THE SIDEBAR — notebooks > sections > pages, like OneNote.
+     ============================================================ */
+  #side {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 268px; z-index: 30;
+    background: var(--side); border-right: 1px solid var(--edge);
+    transform: translateX(-100%); transition: transform .18s ease;
+    display: flex; flex-direction: column; padding: 14px 12px; gap: 10px;
+    -webkit-user-select: text; user-select: text;
+  }
+  #side.open { transform: none; }
+  #side h3 { margin: 6px 0 2px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  #side .row { display: flex; gap: 6px; align-items: center; }
+  #side select, #side input.new {
+    flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 6px 8px;
+    border: 1px solid var(--edge); border-radius: 8px; background: var(--ui); color: var(--text);
+  }
+  #side .list { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
+  #side .item {
+    text-align: left; border: 1px solid transparent; background: transparent; color: var(--text); font: inherit; font-size: 14px;
+    padding: 7px 10px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px;
+  }
+  #side .item:hover { background: #ebe6da; }
+  #side .item[aria-current="true"] { background: var(--ui); border-color: var(--edge); font-weight: 600; }
+  #side .item .del { color: var(--muted); font-size: 12px; padding: 0 4px; }
+  #side .item .del:hover { color: #a33; }
+  #side .pages { flex: 1; }
+  #side .foot { font-size: 12px; color: var(--muted); }
+
+  /* ============================================================
+     THE CHAT — talk to the tutor. It sees the board every time.
+     ============================================================ */
+  #chat {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 100vw); z-index: 30;
+    background: var(--ui); border-left: 1px solid var(--edge);
+    transform: translateX(100%); transition: transform .18s ease;
+    display: flex; flex-direction: column;
+    -webkit-user-select: text; user-select: text;
+  }
+  #chat.open { transform: none; }
+  #chat header { padding: 14px 16px 10px; border-bottom: 1px solid var(--edge); display: flex; justify-content: space-between; align-items: center; }
+  #chat header b { font-size: 14px; }
+  #msgs { flex: 1; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 88%; padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+  .msg.you { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.ai  { align-self: flex-start; background: var(--side); border-bottom-left-radius: 4px; }
+  .msg.ai.board { border-left: 3px solid var(--ai-ink); }
+  .msg.thinking { color: var(--muted); font-style: italic; background: transparent; }
+  #chatform { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--edge); }
+  #chatform input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 10px; background: var(--paper); color: var(--text); }
+
+  /* ============================================================
+     THE READ-BACK PANEL — only when the model wasn't sure.
      ============================================================ */
   #panel {
-    position: fixed; right: 16px; top: 76px; width: min(390px, calc(100vw - 32px));
-    max-height: calc(100vh - 100px); overflow: auto;
+    position: fixed; left: 50%; top: 112px; transform: translateX(-50%); width: min(420px, calc(100vw - 32px));
+    max-height: calc(100vh - 140px); overflow: auto;
     background: var(--ui); border: 1px solid var(--edge); border-radius: 12px;
-    box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 10;
-    display: none;
+    box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none;
+    -webkit-user-select: text; user-select: text;
   }
   #panel.on { display: block; }
   #panel h2 { margin: 0 0 4px; font-size: 15px; }
   #panel .why { margin: 0 0 11px; font-size: 13px; color: var(--muted); }
   #read {
-    width: 100%; min-height: 190px; resize: vertical;
+    width: 100%; min-height: 170px; resize: vertical;
     font: 13px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
     color: var(--text); background: var(--paper);
     border: 1px solid var(--edge); border-radius: 8px; padding: 10px;
-    -webkit-user-select: text; user-select: text;
   }
   #panel .row { display: flex; gap: 8px; margin-top: 11px; }
   #panel .row button { flex: 1; }
 
-  /* the topic line: tells the model what the problem IS, so it isn't reading blind */
-  #topic {
-    position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
-    width: min(480px, calc(100vw - 32px)); z-index: 9;
-    padding: 7px 12px; border-radius: 9px; font: inherit; font-size: 13.5px;
-    color: var(--text); background: var(--ui); border: 1px solid var(--edge);
-    -webkit-user-select: text; user-select: text;
-  }
-  #topic::placeholder { color: var(--muted); }
-
-  #status {
-    position: fixed; left: 16px; bottom: 14px; z-index: 10;
-    font-size: 13px; color: var(--muted); max-width: 60vw;
-  }
+  #status { position: fixed; left: 16px; bottom: 14px; z-index: 10; font-size: 13px; color: var(--muted); max-width: 50vw; }
   #status.bad { color: #a33; }
-  #showRead { position: fixed; right: 16px; bottom: 12px; z-index: 10; font-size: 12.5px; padding: 5px 10px; }
-
-  #hint {
-    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
-    z-index: 5; font-size: 12.5px; color: var(--muted); pointer-events: none;
-  }
+  #showRead { position: fixed; left: 16px; bottom: 40px; z-index: 10; font-size: 12.5px; padding: 5px 10px; }
+  #hint { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 5; font-size: 12.5px; color: var(--muted); pointer-events: none; }
 </style>
 </head>
 <body>
@@ -139,19 +191,53 @@
 <canvas id="board"></canvas>
 
 <div id="bar">
+  <button class="act icon" id="sideBtn" title="Notebooks">☰</button>
   <div class="pens" id="pens"></div>
   <button class="act" id="eraser" aria-pressed="false" title="Eraser — touch a stroke to remove it">Eraser</button>
   <div class="sep"></div>
   <button class="act" id="undo" title="Undo">Undo</button>
-  <button class="act" id="clear" title="Clear the ink (keeps the PDF)">Clear</button>
+  <button class="act" id="clear" title="Clear the ink on this page (keeps the PDF)">Clear</button>
   <div class="sep"></div>
-  <button class="act" id="pdfbtn" title="Put a PDF on the board to write on">PDF</button>
+  <button class="act" id="pdfbtn" title="Put a PDF on this page to write on">PDF</button>
   <input type="file" id="pdffile" accept="application/pdf" hidden>
+  <button class="act" id="exportBtn" title="Send this page or notebook to OneNote, Drive, Files…">Export</button>
   <div class="sep"></div>
   <button class="act primary" id="check">Check my work</button>
+  <button class="act" id="chatBtn" aria-pressed="false" title="Talk to the tutor">Chat</button>
+</div>
+<div id="exportMenu">
+  <button class="act" id="expPage">This page → image</button>
+  <button class="act" id="expNotebook">This notebook → PDF</button>
 </div>
 
-<input id="topic" placeholder="What are you working on? e.g. M220 — tangent lines with the power rule" autocomplete="off" spellcheck="false">
+<div id="meta">
+  <input id="title" placeholder="Page title" autocomplete="off" spellcheck="false">
+  <input id="topic" placeholder="What are you working on? e.g. M220 — tangent lines" autocomplete="off" spellcheck="false">
+</div>
+
+<aside id="side">
+  <h3>Notebook</h3>
+  <div class="row">
+    <select id="nbSel"></select>
+    <button class="act icon" id="nbAdd" title="New notebook">+</button>
+  </div>
+  <h3>Sections</h3>
+  <div class="list" id="secList"></div>
+  <div class="row"><input class="new" id="secNew" placeholder="New section… (Enter)"></div>
+  <h3>Pages</h3>
+  <div class="list pages" id="pageList"></div>
+  <div class="row"><button class="act" id="pageAdd" style="flex:1">+ New page</button></div>
+  <div class="foot" id="saveNote">Saved on this device</div>
+</aside>
+
+<aside id="chat">
+  <header><b>Tutor</b><button class="act icon" id="chatClose" title="Close">×</button></header>
+  <div id="msgs"></div>
+  <form id="chatform">
+    <input id="chatIn" placeholder="Ask, or say 'give me a problem'" autocomplete="off">
+    <button class="act primary" type="submit">Send</button>
+  </form>
+</aside>
 
 <div id="panel">
   <h2 id="panelTitle">Here's what I read</h2>
@@ -169,12 +255,13 @@
 
 <script>
 /* ============================================================
-   THE STATE — everything the board knows.
+   THE STATE — everything the board knows about the CURRENT page.
 
-   strokes[] is the memory. Undo pops it, clear empties it, and
-   every redraw is just "walk the list and draw it again". The
-   AI's writing lives in its OWN list so it can never be undone
-   by the student's undo, and never blends into their work.
+   strokes[] is the memory. Undo pops it, clear empties it, and every
+   redraw is just "walk the list and draw it again". The AI's writing
+   lives in its OWN lists so it can never be undone by the student's
+   undo, and never blends into their work. Switching pages swaps what
+   is IN these lists — the lists themselves never change identity.
    ============================================================ */
 const PENS   = ['#2e2c28', '#1d4ed8', '#166534', '#7c2d12'];  /* no amber here */
 const AI_INK = '#c2410c';                                      /* reserved */
@@ -183,6 +270,8 @@ const strokes = [];      /* [{color, width, pts:[{x,y}]}]  — the student's */
 const pages   = [];      /* [{img, x, y, w, h}] — a PDF's pages, stacked, UNDER the ink */
 const aiMarks = [];      /* [{x, y, size, text, shown}]    — the AI's writing */
 const aiLines = [];      /* [{x1,y1,x2,y2, shown}]         — the AI's strike-throughs */
+const chat    = [];      /* [{role:'you'|'ai', text, board?}] — this page's conversation */
+let pdfBytes  = null;    /* the PDF on this page, so it can be saved and re-rendered */
 
 let pen = PENS[0];
 let tool = 'pen';        /* 'pen' or 'eraser' */
@@ -206,8 +295,8 @@ const PAPER = getCSS('--paper'), RULE = getCSS('--line');   /* read once, not pe
 
 /* ============================================================
    fit — size the canvas to the window at real device resolution.
-   Without the devicePixelRatio scaling, handwriting looks furry
-   on a retina screen, and the vision model has to read furry ink.
+   Without the devicePixelRatio scaling, handwriting looks furry on
+   a retina screen, and the vision model has to read furry ink.
    ============================================================ */
 function fit() {
   const r = window.devicePixelRatio || 1;
@@ -222,10 +311,8 @@ addEventListener('resize', fit);
 
 /* ============================================================
    redraw — the whole board, from the lists, every time.
-
-   Simple beats clever here: there is no partial repainting to get
-   wrong, and at handwriting scale it is far faster than it needs
-   to be.
+   Simple beats clever: no partial repainting to get wrong, and at
+   handwriting scale it is far faster than it needs to be.
    ============================================================ */
 function redraw() {
   const r = window.devicePixelRatio || 1;
@@ -242,52 +329,62 @@ function redraw() {
     ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(innerWidth, y + .5); ctx.stroke();
   }
 
-  /* ---- everything below this moves with the pan and scales with the zoom ---- */
+  /* ---- everything below moves with the pan and scales with the zoom ---- */
   ctx.save();
   ctx.translate(pan.x, pan.y);
   ctx.scale(zoom, zoom);
-
-  /* the paper you brought: PDF pages, drawn first so ink sits on top */
-  for (const pg of pages) {
-    ctx.shadowColor = 'rgba(0,0,0,.12)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 3;
-    ctx.fillStyle = '#fff'; ctx.fillRect(pg.x, pg.y, pg.w, pg.h);
-    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-    ctx.drawImage(pg.img, pg.x, pg.y, pg.w, pg.h);
-  }
-
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  for (const s of strokes) drawStroke(s);
-  if (drawing) drawStroke(drawing);
-
-  /* ---- the AI's ink: its own colour, its own layer, and only ---- */
-  /* ---- as many characters as the animation has revealed      ---- */
-  /* its strike-throughs: a line through the wrong bit, drawn left to right */
-  ctx.strokeStyle = AI_INK; ctx.lineWidth = 3; ctx.lineCap = 'round';
-  for (const l of aiLines) {
-    ctx.beginPath();
-    ctx.moveTo(l.x1, l.y1);
-    ctx.lineTo(l.x1 + (l.x2 - l.x1) * l.shown, l.y1 + (l.y2 - l.y1) * l.shown);
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = AI_INK;
-  ctx.textBaseline = 'top';
-  for (const m of aiMarks) {
-    ctx.font = aiFont(m.size);
-    const lines = m.text.slice(0, m.shown).split('\n');
-    lines.forEach((ln, i) => ctx.fillText(ln, m.x, m.y + i * m.size * 1.35));
-  }
-
+  paint(ctx, {shadows: true});
   ctx.restore();
 }
 
-function drawStroke(s) {
-  ctx.strokeStyle = s.color;
-  ctx.lineWidth = s.width;
-  ctx.beginPath();
-  tracePath(ctx, s.pts);
-  ctx.stroke();
+/* ============================================================
+   paint — the page's content, in board coordinates, onto ANY canvas.
+   The screen, the snapshot for the model, and the export all call
+   this, so what you see is exactly what gets sent and saved.
+   ============================================================ */
+function paint(c, {shadows = false, ai = true, pdf = true, revealed = true} = {}) {
+  /* the paper you brought: PDF pages, drawn first so ink sits on top */
+  if (pdf) for (const pg of pages) {
+    if (shadows) { c.shadowColor = 'rgba(0,0,0,.12)'; c.shadowBlur = 12; c.shadowOffsetY = 3; }
+    c.fillStyle = '#fff'; c.fillRect(pg.x, pg.y, pg.w, pg.h);
+    c.shadowColor = 'transparent'; c.shadowBlur = 0; c.shadowOffsetY = 0;
+    c.drawImage(pg.img, pg.x, pg.y, pg.w, pg.h);
+  }
+
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  for (const s of strokes) drawStroke(c, s);
+  if (c === ctx && drawing) drawStroke(c, drawing);
+
+  if (!ai) return;
+
+  /* the AI's strike-throughs: a line through the wrong bit, left to right */
+  c.strokeStyle = AI_INK; c.lineWidth = 3;
+  for (const l of aiLines) {
+    const f = revealed ? l.shown : 1;
+    c.beginPath();
+    c.moveTo(l.x1, l.y1);
+    c.lineTo(l.x1 + (l.x2 - l.x1) * f, l.y1 + (l.y2 - l.y1) * f);
+    c.stroke();
+  }
+
+  /* the AI's writing: its own colour, its own layer, only as many
+     characters as the animation has revealed, at the student's size */
+  c.fillStyle = AI_INK;
+  c.textBaseline = 'top';
+  for (const m of aiMarks) {
+    c.font = aiFont(m.size);
+    const lines = (revealed ? m.text.slice(0, m.shown) : m.text).split('\n');
+    lines.forEach((ln, i) => c.fillText(ln, m.x, m.y + i * m.size * 1.35));
+  }
+}
+
+function drawStroke(c, s) {
+  c.strokeStyle = s.color;
+  c.lineWidth = s.width;
+  c.beginPath();
+  tracePath(c, s.pts);
+  c.stroke();
 }
 
 /* ============================================================
@@ -313,13 +410,16 @@ function getCSS(name) {
 }
 
 /* ============================================================
-   INPUT — the rule that makes this feel like paper:
+   INPUT — the rules that make this feel like paper:
 
-     pen or mouse  -> draw
-     finger        -> pan, never draw
+     pen or mouse       -> draw
+     one finger         -> pan, until a pen has been used; then it is a palm
+     two fingers        -> pan and zoom, always
+     eraser (toggle, or a pen's eraser end) -> remove whole strokes
 
-   That is real palm rejection. You can rest your hand on the
-   screen while you write, the way you do on paper.
+   Once a real pen has touched the page, a single finger never pans —
+   that's how GoodNotes and Procreate behave, and it is what makes
+   resting your hand on the glass safe.
    ============================================================ */
 let lastPenAt = 0;       /* when the pen last touched — a palm lands right after */
 const PALM_MS = 1500;    /* a finger inside this window of pen contact is a palm */
@@ -327,27 +427,20 @@ let penSeen = false;     /* once a real pen has touched, single fingers are palm
 
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
+  sideEl.classList.remove('open'); exportMenu.classList.remove('open');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
-    /* A finger while the pen is down, or right after it lifted, is your
-       palm — not a request to move the paper. Ignore it completely.
-       Without this the board slid under the pen mid-word. */
-    if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;
+    if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;   /* a palm */
 
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
-    /* Once a pen has been used this session, one finger is a palm — it
-       never pans. Two fingers still pan and zoom (the pinch tracks its
-       midpoint, so moving both fingers moves the paper). This is how
-       GoodNotes and Procreate behave, and it is what makes resting
-       your hand on the glass safe. */
-    if (penSeen && touches.size === 1) return;
+    if (penSeen && touches.size === 1) return;                                  /* also a palm */
     if (touches.size === 2) {                /* second finger: a pinch begins */
       const [a, b] = [...touches.values()];
       pinch = {dist: Math.hypot(a.x - b.x, a.y - b.y),
                mid: {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2},
                zoom0: zoom, pan0: {...pan}};
       panFrom = null;
-    } else if (touches.size === 1) {         /* one finger: move the paper */
+    } else if (touches.size === 1) {         /* one finger, no pen yet: move the paper */
       panFrom = {x: e.clientX - pan.x, y: e.clientY - pan.y};
     }
     return;
@@ -399,10 +492,10 @@ cv.addEventListener('pointermove', e => {
   if (!drawing) return;
 
   /* The Pencil samples far faster than the browser fires events; the
-     in-between samples are handed over as "coalesced" events. Use them,
-     or fast strokes come out as a few long straight lines. */
-  /* (the list can come back EMPTY for synthetic or non-pen input — then
-     the event itself is the only sample, and must not be dropped) */
+     in-between samples come as "coalesced" events. Use them, or fast
+     strokes come out as a few long straight lines. (The list can be
+     EMPTY for synthetic or non-pen input — then the event itself is
+     the only sample, and must not be dropped.) */
   const coalesced = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
   const events = coalesced && coalesced.length ? coalesced : [e];
   const from = drawing.pts.length;
@@ -426,14 +519,15 @@ function done(e) {
     touches.delete(e.pointerId);
     if (touches.size < 2) pinch = null;
     if (touches.size === 0) panFrom = null;
-    else if (touches.size === 1) {           /* one finger left: it can keep panning */
+    else if (touches.size === 1 && !penSeen) {   /* one finger left: it can keep panning */
       const t = [...touches.values()][0];
       panFrom = {x: t.x - pan.x, y: t.y - pan.y};
     }
+    dirty();                                     /* pan/zoom are saved too */
     return;
   }
   if (erasing) {                                   /* one drag = one undo step */
-    if (erasing.length) history.push({type: 'erase', strokes: erasing});
+    if (erasing.length) { history.push({type: 'erase', strokes: erasing}); dirty(); }
     erasing = null;
     return redraw();
   }
@@ -442,16 +536,21 @@ function done(e) {
     strokes.push(drawing);
     history.push({type: 'add', stroke: drawing});
     lastPenAt = performance.now();
+    dirty();
   }
   drawing = null;
   redraw();
 }
+cv.addEventListener('pointerup', done);
+cv.addEventListener('pointercancel', done);
+/* NOT pointerleave: with pointer capture the up still arrives, and ending
+   a stroke the moment the pen crossed the edge cut words in half. */
 
 /* ============================================================
-   eraseAt — a stroke eraser, like OneNote's default: touch any
-   part of a stroke and the whole stroke goes. Whole strokes, not
-   pixels, because strokes[] is the memory — a pixel eraser would
-   leave the picture and the list disagreeing.
+   eraseAt — a stroke eraser, like OneNote's default: touch any part
+   of a stroke and the whole stroke goes. Whole strokes, not pixels,
+   because strokes[] is the memory — a pixel eraser would leave the
+   picture and the list disagreeing.
    ============================================================ */
 const ERASER_R = 12;
 function eraseAt(p) {
@@ -483,10 +582,6 @@ function segDist(a, b, p) {
   const qx = a.x + t * dx, qy = a.y + t * dy;
   return Math.hypot(p.x - qx, p.y - qy);
 }
-cv.addEventListener('pointerup', done);
-cv.addEventListener('pointercancel', done);
-/* NOT pointerleave: with pointer capture the up still arrives, and ending
-   a stroke the moment the pen crossed the edge cut words in half. */
 
 /* a mouse can't pan by dragging (dragging draws), so the wheel / trackpad
    does. A trackpad pinch arrives as a wheel with ctrlKey — that zooms. */
@@ -499,6 +594,7 @@ cv.addEventListener('wheel', e => {
     pan = {x: pan.x - e.deltaX, y: pan.y - e.deltaY};
   }
   redraw();
+  dirty();
 }, {passive: false});
 
 /* change zoom while keeping the board point under (sx, sy) where it is */
@@ -551,32 +647,29 @@ document.getElementById('undo').onclick = () => {
     strokes.push(...last.strokes);
   }
   redraw();
+  dirty();
 };
 document.getElementById('clear').onclick = () => {
-  strokes.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0; redraw(); say('');
-  showRead.hidden = true;
+  strokes.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0;
+  redraw(); say(''); showRead.hidden = true;
+  dirty();
 };
 
 /* ============================================================
    SNAPSHOT — a clean picture of the work for the model.
-
-   Deliberately NOT the visible canvas: the ruled lines and the
-   AI's own previous marks would both end up in the image, and the
-   model would try to read them as part of the student's work.
-   White paper, student ink only.
+   Deliberately NOT the visible canvas: the ruled lines and the AI's
+   own marks would end up in the image and be read as the student's
+   work. White paper, the student's ink, and — if the ink is on a PDF
+   page — that page, because the printed problem is context the model
+   badly needs. Pages the ink never touched stay out.
    ============================================================ */
 function snapshot() {
   let box = bounds();
   if (!box) return null;
 
-  /* If the ink is on a PDF page, send the whole page: the printed problem
-     is context the model badly needs. Pages the ink never touched stay out. */
   const onPages = pages.filter(pg => pg.x < box.maxX && pg.x + pg.w > box.minX &&
                                      pg.y < box.maxY && pg.y + pg.h > box.minY);
-  for (const pg of onPages) {
-    box = {minX: Math.min(box.minX, pg.x), minY: Math.min(box.minY, pg.y),
-           maxX: Math.max(box.maxX, pg.x + pg.w), maxY: Math.max(box.maxY, pg.y + pg.h)};
-  }
+  for (const pg of onPages) box = union(box, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h});
 
   const PAD = 40, SCALE = onPages.length ? 1.3 : 2;   /* a page is already big; ink alone gets 2x */
   const w = box.maxX - box.minX + PAD * 2;
@@ -589,13 +682,9 @@ function snapshot() {
   o.fillRect(0, 0, off.width, off.height);
   o.scale(SCALE, SCALE);
   o.translate(PAD - box.minX, PAD - box.minY);
-  for (const pg of onPages) o.drawImage(pg.img, pg.x, pg.y, pg.w, pg.h);
-  o.lineCap = 'round'; o.lineJoin = 'round';
-
-  for (const s of strokes) {
-    o.strokeStyle = s.color; o.lineWidth = s.width;
-    o.beginPath(); tracePath(o, s.pts); o.stroke();
-  }
+  const keep = pages.splice(0, pages.length, ...onPages);     /* paint only the pages the ink is on */
+  paint(o, {ai: false});
+  pages.splice(0, pages.length, ...keep);
   /* JPEG, not PNG: a fifth of the bytes to upload, and black ink on white
      paper survives compression fine. That upload was most of the wait. */
   return {url: off.toDataURL('image/jpeg', 0.85), box, PAD, SCALE, w: off.width, h: off.height};
@@ -610,24 +699,25 @@ function bounds() {
   }
   return {minX, minY, maxX, maxY};
 }
+const union = (a, b) => !a ? b : !b ? a : {minX: Math.min(a.minX, b.minX), minY: Math.min(a.minY, b.minY),
+                                           maxX: Math.max(a.maxX, b.maxX), maxY: Math.max(a.maxY, b.maxY)};
 
 /* ============================================================
-   THE LOOP — check -> read back -> confirm -> first mistake
+   CHECK MY WORK — read -> (ask only if unsure) -> first mistake
    ============================================================ */
 const panel   = document.getElementById('panel');
 const readEl  = document.getElementById('read');
 const checkEl = document.getElementById('check');
-let shot = null;                       /* the picture both calls share */
-
-/* the topic is a per-device convenience: remember it, but never depend on it */
-const topicEl = document.getElementById('topic');
-try { topicEl.value = localStorage.getItem('showwork.topic') || ''; } catch {}
-topicEl.addEventListener('input', () => { try { localStorage.setItem('showwork.topic', topicEl.value); } catch {} });
-const topic = () => topicEl.value.trim();
-
 const showRead = document.getElementById('showRead');
 const panelTitle = document.getElementById('panelTitle');
 const panelWhy = document.getElementById('panelWhy');
+const topicEl = document.getElementById('topic');
+const titleEl = document.getElementById('title');
+const topic = () => topicEl.value.trim();
+let shot = null;                       /* the picture both calls share */
+
+topicEl.addEventListener('input', dirty);
+titleEl.addEventListener('input', () => { if (current) { current.title = titleEl.value; renderSide(); } dirty(); });
 
 checkEl.onclick = async () => {
   shot = snapshot();
@@ -639,10 +729,9 @@ checkEl.onclick = async () => {
     readEl.value = r.transcription;
     showRead.hidden = false;
 
-    /* The model marks anything it wasn't sure of in [brackets]. If there
-       are none, don't stop to ask — go straight to the check. If there
-       are, ask ONLY about those, because tutoring on a misread is worse
-       than no tutoring. The reading stays one tap away either way. */
+    /* The model marks anything it wasn't sure of in [brackets]. None?
+       Don't stop to ask — straight to the check. Some? Ask ONLY about
+       those. The reading stays one tap away either way. */
     const doubts = (r.transcription.match(/\[[^\]]*\]/g) || []).length;
     if (doubts === 0) return runCheck();
 
@@ -654,7 +743,6 @@ checkEl.onclick = async () => {
   busy(false);
 };
 
-/* "What I read" — see or fix the reading any time, and re-check with it */
 showRead.onclick = () => {
   panelTitle.textContent = "Here's what I read";
   panelWhy.textContent = "Fix anything I got wrong, then check again.";
@@ -695,18 +783,13 @@ async function post(path, body) {
 }
 
 /* ============================================================
-   write — the AI's answer, appearing on the board the way a
-   person writes it: one character at a time, below your work,
-   in ink that is only ever its own.
+   THE AI'S INK — strike-throughs and writing, at the student's size
    ============================================================ */
 const aiFont = size => `${size}px "Bradley Hand", "Segoe Script", "Comic Sans MS", cursive`;
 
-/* ============================================================
-   strike — cross out the wrong characters where they sit on the board.
-   The model saw the SNAPSHOT, so its box is in snapshot pixels (as
-   thousandths). Undo the snapshot's scale and padding to land back on
-   the board — the same numbers snapshot() used going the other way.
-   ============================================================ */
+/* cross out the wrong characters where they sit. The model saw the
+   SNAPSHOT, so its box is in snapshot pixels (as thousandths). Undo the
+   snapshot's scale and padding to land back on the board. */
 function strike([ymin, xmin, ymax, xmax]) {
   if (!shot) return;
   const toBoard = (nx, ny) => ({
@@ -721,48 +804,52 @@ function strike([ymin, xmin, ymax, xmax]) {
   const step = now => {
     line.shown = Math.min(1, (now - t0) / MS);
     redraw();
-    if (line.shown < 1) requestAnimationFrame(step);
+    if (line.shown < 1) requestAnimationFrame(step); else dirty();
   };
   requestAnimationFrame(step);
 }
 
-/* ============================================================
-   handSize — how big the student writes, so the AI writes the same
-   size. The median height of their strokes is close to their letter
-   height (dashes and equals signs are too flat to count, so strokes
-   under 6px are ignored). Clamped so it never gets silly.
-   ============================================================ */
+/* how big the student writes, so the AI writes the same size: the median
+   height of their strokes is close to their letter height (dashes and
+   equals signs are too flat to count). Clamped so it never gets silly. */
 function handSize() {
   const hs = strokes.map(s => {
     let lo = Infinity, hi = -Infinity;
     for (const q of s.pts) { if (q.y < lo) lo = q.y; if (q.y > hi) hi = q.y; }
     return hi - lo;
   }).filter(h => h > 6).sort((a, b) => a - b);
-  if (!hs.length) return 19;
+  if (!hs.length) return 22;
   return Math.max(14, Math.min(72, hs[hs.length >> 1] * 0.95));
 }
 
+/* where the AI's writing ends, so the next note goes under it */
+function aiBottom() {
+  let b = -Infinity;
+  for (const m of aiMarks) b = Math.max(b, m.y + m.text.split('\n').length * m.size * 1.35);
+  return b;
+}
+
+/* the AI's answer, appearing the way a person writes it: below the work
+   (or below its own last note), paced by the clock at ~45 characters a
+   second, in ink that is only ever its own */
 function write(text) {
   const box = bounds();
   const size = handSize();
-  const width = Math.max(320, box ? box.maxX - box.minX : 0);   /* wrap to the work's width */
+  const width = Math.max(320, box ? box.maxX - box.minX : 0);
   const mark = {
     x: box ? box.minX : 60,
-    y: box ? box.maxY + size * 1.2 : 120,
+    y: Math.max(box ? box.maxY + size * 1.2 : 140, aiBottom() + size * 0.8),
     size,
     text: wrap(text, width, size),
     shown: 0,
   };
   aiMarks.push(mark);
 
-  /* Paced by the clock, not the frame: ~45 characters a second, about
-     as fast as someone writes quickly. If the tab is throttled, the text
-     jumps ahead rather than crawling. */
   const total = mark.text.length, CPS = 45, t0 = performance.now();
   const step = now => {
     mark.shown = Math.min(total, Math.floor((now - t0) / 1000 * CPS));
     redraw();
-    if (mark.shown < total) requestAnimationFrame(step);
+    if (mark.shown < total) requestAnimationFrame(step); else dirty();
   };
   requestAnimationFrame(step);
 }
@@ -783,7 +870,7 @@ function wrap(text, maxWidth, size) {
 }
 
 /* ============================================================
-   PDF — put a worksheet on the board and write on it.
+   PDF — put a worksheet on the page and write on it.
    pdf.js is fetched from cdnjs the first time you ask for it, so the
    board stays light for everyone who never does. Every page is rendered
    once to an offscreen canvas and stacked down the board; ink sits on top.
@@ -796,36 +883,386 @@ document.getElementById('pdfbtn').onclick = () => document.getElementById('pdffi
 document.getElementById('pdffile').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
-  say('Rendering PDF…');
   try {
-    if (!pdfjsLib) {
-      pdfjsLib = await import(PDFJS_URL);
-      pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-    }
-    const doc = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
-
-    pages.length = 0;
-    let y = 0;
-    const GAP = 28, RENDER = 2;          /* render at 2x so zooming in stays sharp */
-    for (let n = 1; n <= doc.numPages; n++) {
-      const page = await doc.getPage(n);
-      const vp = page.getViewport({scale: 1});       /* 1 PDF point = 1 board unit */
-      const c = document.createElement('canvas');
-      c.width = vp.width * RENDER; c.height = vp.height * RENDER;
-      await page.render({canvasContext: c.getContext('2d'),
-                         viewport: page.getViewport({scale: RENDER})}).promise;
-      pages.push({img: c, x: 0, y, w: vp.width, h: vp.height});
-      y += vp.height + GAP;
-    }
+    const bytes = await file.arrayBuffer();
+    const rendered = await renderPdf(bytes);
+    pages.splice(0, pages.length, ...rendered);
+    pdfBytes = bytes;
     /* bring page 1 into view under the toolbar, life size */
-    zoom = 1; pan = {x: Math.max(24, (innerWidth - pages[0].w) / 2), y: 110};
+    zoom = 1; pan = {x: Math.max(24, (innerWidth - pages[0].w) / 2), y: 120};
     redraw();
-    say(`${doc.numPages} page${doc.numPages > 1 ? 's' : ''} on the board`);
+    dirty();
   } catch (err) {
     say('Could not open that PDF: ' + err.message, true);
   }
   e.target.value = '';                  /* so choosing the same file again re-fires */
 });
+
+/* render every page of a PDF to offscreen canvases, stacked in board coordinates */
+async function renderPdf(bytes) {
+  say('Rendering PDF…');
+  if (!pdfjsLib) {
+    pdfjsLib = await import(PDFJS_URL);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+  }
+  const doc = await pdfjsLib.getDocument({data: bytes.slice(0)}).promise;   /* pdf.js takes the buffer; give it a copy */
+  const out = [];
+  let y = 0;
+  const GAP = 28, RENDER = 2;          /* render at 2x so zooming in stays sharp */
+  for (let n = 1; n <= doc.numPages; n++) {
+    const page = await doc.getPage(n);
+    const vp = page.getViewport({scale: 1});       /* 1 PDF point = 1 board unit */
+    const c = document.createElement('canvas');
+    c.width = vp.width * RENDER; c.height = vp.height * RENDER;
+    await page.render({canvasContext: c.getContext('2d'),
+                       viewport: page.getViewport({scale: RENDER})}).promise;
+    out.push({img: c, x: 0, y, w: vp.width, h: vp.height});
+    y += vp.height + GAP;
+  }
+  say(`${doc.numPages} page${doc.numPages > 1 ? 's' : ''} on the board`);
+  return out;
+}
+
+/* ============================================================
+   THE CHAT — a tutor you can talk to, who is looking at the page.
+
+   Every message goes with a picture of the board and the topic, so it
+   never answers blind. It replies with two things: what to SAY, and
+   (optionally) what to WRITE on the board — a practice problem, a
+   worked line. Its writing lands in its own ink, like everything else
+   it does. The conversation is saved with the page.
+   ============================================================ */
+const chatEl = document.getElementById('chat');
+const msgsEl = document.getElementById('msgs');
+const chatIn = document.getElementById('chatIn');
+const chatBtn = document.getElementById('chatBtn');
+chatBtn.onclick = () => {
+  const open = chatEl.classList.toggle('open');
+  chatBtn.setAttribute('aria-pressed', open);
+  if (open) chatIn.focus();
+};
+document.getElementById('chatClose').onclick = () => chatBtn.onclick();
+
+function renderChat() {
+  msgsEl.innerHTML = '';
+  if (!chat.length) {
+    const hello = document.createElement('div');
+    hello.className = 'msg ai';
+    hello.textContent = "I can see this page. Ask me anything about it, or say \"give me a problem\" and I'll write one on the board.";
+    msgsEl.appendChild(hello);
+  }
+  for (const m of chat) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + m.role + (m.board ? ' board' : '');
+    d.textContent = m.text + (m.board ? '\n✎ written on the board' : '');
+    msgsEl.appendChild(d);
+  }
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+document.getElementById('chatform').addEventListener('submit', async e => {
+  e.preventDefault();
+  const text = chatIn.value.trim();
+  if (!text) return;
+  chatIn.value = '';
+  chat.push({role: 'you', text});
+  renderChat(); dirty();
+
+  const thinking = document.createElement('div');
+  thinking.className = 'msg ai thinking'; thinking.textContent = 'looking at the page…';
+  msgsEl.appendChild(thinking); msgsEl.scrollTop = msgsEl.scrollHeight;
+
+  try {
+    const s = snapshot();                                /* null on an empty page — that's fine */
+    const r = await post('/chat', {
+      image: s ? s.url : null,
+      context: topic(),
+      messages: chat.slice(-16).map(m => ({role: m.role === 'you' ? 'user' : 'model', text: m.text})),
+    });
+    const board = (r.board || '').trim();
+    chat.push({role: 'ai', text: (r.say || '').trim() || '…', board: !!board});
+    if (board) write(board);
+  } catch (err) {
+    chat.push({role: 'ai', text: 'I couldn\'t answer that: ' + err.message});
+  }
+  renderChat(); dirty();
+});
+
+/* ============================================================
+   EXPORT — hand the work to wherever it lives next.
+   A page becomes a PNG; a notebook becomes a PDF (jsPDF, one page per
+   page). On a phone or iPad the share sheet opens — OneNote, Google
+   Drive, Files, AirDrop. On a desktop it downloads.
+   ============================================================ */
+const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+const exportMenu = document.getElementById('exportMenu');
+const exportBtn = document.getElementById('exportBtn');
+exportBtn.onclick = () => {
+  const r = exportBtn.getBoundingClientRect();
+  exportMenu.style.left = r.left + 'px'; exportMenu.style.top = (r.bottom + 6) + 'px';
+  exportMenu.classList.toggle('open');
+};
+
+/* the whole page — PDF pages, ink, and the AI's finished notes — as a canvas */
+function renderPageCanvas(maxWidth = 1800) {
+  let box = bounds();
+  for (const pg of pages) box = union(box, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h});
+  const c2 = document.createElement('canvas').getContext('2d');
+  for (const m of aiMarks) {
+    c2.font = aiFont(m.size);
+    const lines = m.text.split('\n');
+    const w = Math.max(...lines.map(l => c2.measureText(l).width));
+    box = union(box, {minX: m.x, minY: m.y, maxX: m.x + w, maxY: m.y + lines.length * m.size * 1.35});
+  }
+  if (!box) box = {minX: 0, minY: 0, maxX: 600, maxY: 400};
+  const PAD = 48;
+  const w = box.maxX - box.minX + PAD * 2, h = box.maxY - box.minY + PAD * 2;
+  const scale = Math.min(2, maxWidth / w);
+  const off = document.createElement('canvas');
+  off.width = Math.round(w * scale); off.height = Math.round(h * scale);
+  const o = off.getContext('2d');
+  o.fillStyle = '#ffffff'; o.fillRect(0, 0, off.width, off.height);
+  o.scale(scale, scale); o.translate(PAD - box.minX, PAD - box.minY);
+  paint(o, {revealed: false});
+  return off;
+}
+
+const toBlob = (canvas, type, q) => new Promise(res => canvas.toBlob(res, type, q));
+const safeName = s => (s || 'page').replace(/[^\w\- ]+/g, '').trim().slice(0, 60) || 'page';
+
+/* share sheet where there is one, download where there isn't */
+async function deliver(blob, name) {
+  const file = new File([blob], name, {type: blob.type});
+  if (navigator.canShare && navigator.canShare({files: [file]})) {
+    try { await navigator.share({files: [file], title: name}); return say('Shared.'); }
+    catch (e) { if (e.name === 'AbortError') return say(''); }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  say('Downloaded ' + name);
+}
+
+document.getElementById('expPage').onclick = async () => {
+  exportMenu.classList.remove('open');
+  const blob = await toBlob(renderPageCanvas(), 'image/png');
+  await deliver(blob, safeName(titleEl.value) + '.png');
+};
+
+document.getElementById('expNotebook').onclick = async () => {
+  exportMenu.classList.remove('open');
+  say('Building the PDF…');
+  try {
+    if (!window.jspdf) await new Promise((res, rej) => {
+      const s = document.createElement('script'); s.src = JSPDF_URL; s.onload = res; s.onerror = () => rej(new Error('could not load jsPDF')); document.head.appendChild(s);
+    });
+    const {jsPDF} = window.jspdf;
+    const recs = sheets.filter(s => s.notebook === current.notebook)
+                       .sort((a, b) => (a.section + a.title).localeCompare(b.section + b.title));
+    await save();
+    const keepId = current.id;
+    let doc = null;
+    for (const rec of recs) {
+      const full = (await store.all()).find(s => s.id === rec.id) || rec;
+      await openPage(full, {quiet: true});
+      const c = renderPageCanvas(1600);
+      const wmm = 210, hmm = wmm * c.height / c.width;              /* A4 width, height to fit */
+      if (!doc) doc = new jsPDF({unit: 'mm', format: [wmm, hmm]}); else doc.addPage([wmm, hmm]);
+      doc.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, wmm, hmm);
+    }
+    const back = (await store.all()).find(s => s.id === keepId);
+    if (back) await openPage(back, {quiet: true});
+    await deliver(doc.output('blob'), safeName(current.notebook) + '.pdf');
+  } catch (e) { say('Export failed: ' + e.message, true); }
+};
+
+/* ============================================================
+   THE NOTEBOOK — notebooks > sections > pages, saved on this device.
+
+   Every page is one record in IndexedDB. Notebooks and sections are
+   just the names on the pages (the way folders are just paths), so an
+   empty notebook is created by making its first page. The `store`
+   object is the seam: swap its three functions for a server and the
+   rest of the notebook never knows.
+   ============================================================ */
+const store = (() => {
+  let db = null, memory = new Map();   /* memory: the fallback when IndexedDB is blocked */
+  const open = () => new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open('showwork', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('pages', {keyPath: 'id'});
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  });
+  const tx = (mode, fn) => new Promise((res, rej) => {
+    const t = db.transaction('pages', mode);
+    const rq = fn(t.objectStore('pages'));
+    t.oncomplete = () => res(rq && rq.result);
+    t.onerror = () => rej(t.error);
+  });
+  return {
+    async init() { try { db = await open(); return true; } catch { db = null; return false; } },
+    all()   { return db ? tx('readonly',  s => s.getAll())   : Promise.resolve([...memory.values()]); },
+    put(p)  { return db ? tx('readwrite', s => s.put(p))     : (memory.set(p.id, p), Promise.resolve()); },
+    del(id) { return db ? tx('readwrite', s => s.delete(id)) : (memory.delete(id), Promise.resolve()); },
+  };
+})();
+
+let sheets = [];         /* every saved page */
+let current = null;      /* the page on the board right now */
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* what a page looks like on disk */
+function serialize() {
+  return {
+    id: current.id, notebook: current.notebook, section: current.section, title: titleEl.value,
+    topic: topicEl.value, pan: {...pan}, zoom,
+    strokes: strokes.map(s => ({color: s.color, width: s.width, pts: s.pts.map(p => ({x: p.x, y: p.y}))})),
+    aiMarks: aiMarks.map(m => ({x: m.x, y: m.y, size: m.size, text: m.text, shown: m.text.length})),
+    aiLines: aiLines.map(l => ({x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, shown: 1})),
+    chat: chat.map(m => ({role: m.role, text: m.text, board: !!m.board})),
+    pdf: pdfBytes,
+    updated: Date.now(),
+  };
+}
+
+/* autosave: many changes in a burst become one write, ~600ms after the last */
+let saveTimer = null;
+function dirty() {
+  if (!current) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 600);
+}
+async function save() {
+  if (!current) return;
+  clearTimeout(saveTimer);
+  const rec = serialize();
+  Object.assign(current, {title: rec.title, updated: rec.updated});
+  try {
+    await store.put(rec);
+    document.getElementById('saveNote').textContent =
+      'Saved ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+  } catch (e) { say('Could not save: ' + e.message, true); }
+}
+
+async function openPage(rec, {quiet = false} = {}) {
+  clearTimeout(saveTimer);
+  if (current && current.id !== rec.id) await save();     /* never lose the page we're leaving */
+
+  current = sheets.find(s => s.id === rec.id) || rec;
+  strokes.length = 0; strokes.push(...(rec.strokes || []));
+  aiMarks.length = 0; aiMarks.push(...(rec.aiMarks || []));
+  aiLines.length = 0; aiLines.push(...(rec.aiLines || []));
+  chat.length = 0;    chat.push(...(rec.chat || []));
+  history.length = 0;
+  pages.length = 0; pdfBytes = rec.pdf || null;
+  pan = rec.pan ? {...rec.pan} : {x: 0, y: 0};
+  zoom = rec.zoom || 1;
+  titleEl.value = rec.title || '';
+  topicEl.value = rec.topic || '';
+  showRead.hidden = true; if (!quiet) say('');
+  if (pdfBytes) {
+    try { pages.push(...await renderPdf(pdfBytes)); }
+    catch (e) { say('Could not re-open this page\'s PDF: ' + e.message, true); }
+  }
+  redraw(); renderChat(); renderSide();
+  try { localStorage.setItem('showwork.last', current.id); } catch {}
+}
+
+async function newPage(notebook, section, title) {
+  const rec = {id: uid(), notebook, section, title: title || 'Untitled page', topic: '',
+               strokes: [], aiMarks: [], aiLines: [], chat: [], pdf: null, pan: {x: 0, y: 0}, zoom: 1, updated: Date.now()};
+  sheets.push(rec);
+  await store.put(rec);
+  await openPage(rec);
+  titleEl.focus(); titleEl.select();
+}
+
+/* ---- the sidebar ---- */
+const sideEl = document.getElementById('side');
+const nbSel = document.getElementById('nbSel');
+document.getElementById('sideBtn').onclick = () => sideEl.classList.toggle('open');
+
+function renderSide() {
+  if (!current) return;
+  const notebooks = [...new Set(sheets.map(s => s.notebook))].sort();
+  nbSel.innerHTML = notebooks.map(n => `<option${n === current.notebook ? ' selected' : ''}>${esc(n)}</option>`).join('');
+
+  const secs = [...new Set(sheets.filter(s => s.notebook === current.notebook).map(s => s.section))].sort();
+  const secList = document.getElementById('secList');
+  secList.innerHTML = '';
+  for (const sec of secs) {
+    const b = document.createElement('button');
+    b.className = 'item'; b.textContent = sec;
+    b.setAttribute('aria-current', sec === current.section);
+    b.onclick = async () => {
+      const first = sheets.filter(s => s.notebook === current.notebook && s.section === sec)
+                          .sort((a, b) => b.updated - a.updated)[0];
+      if (first) await openPage(await fullRecord(first));
+    };
+    secList.appendChild(b);
+  }
+
+  const pageList = document.getElementById('pageList');
+  pageList.innerHTML = '';
+  const inSec = sheets.filter(s => s.notebook === current.notebook && s.section === current.section)
+                      .sort((a, b) => b.updated - a.updated);
+  for (const pg of inSec) {
+    const b = document.createElement('button');
+    b.className = 'item';
+    b.setAttribute('aria-current', pg.id === current.id);
+    const name = document.createElement('span'); name.textContent = pg.title || 'Untitled page';
+    const del = document.createElement('span'); del.className = 'del'; del.textContent = '✕'; del.title = 'Delete this page';
+    del.onclick = async ev => {
+      ev.stopPropagation();
+      if (sheets.length === 1) return say('Keep at least one page.', true);
+      sheets = sheets.filter(s => s.id !== pg.id);
+      await store.del(pg.id);
+      if (pg.id === current.id) { current = null; await openPage(await fullRecord(pickStart())); } else renderSide();
+    };
+    b.append(name, del);
+    b.onclick = async () => openPage(await fullRecord(pg));
+    pageList.appendChild(b);
+  }
+}
+const esc = s => s.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
+/* sheets[] holds what we loaded at start; the store has the latest bytes */
+async function fullRecord(rec) {
+  return (await store.all()).find(s => s.id === rec.id) || rec;
+}
+
+nbSel.onchange = async () => {
+  const nb = nbSel.value;
+  const first = sheets.filter(s => s.notebook === nb).sort((a, b) => b.updated - a.updated)[0];
+  if (first) await openPage(await fullRecord(first));
+};
+document.getElementById('nbAdd').onclick = async () => {
+  /* a new notebook is its first page; type the notebook's name where the select is */
+  const n = 'Notebook ' + ([...new Set(sheets.map(s => s.notebook))].length + 1);
+  await newPage(n, 'Notes', 'Page 1');
+  say('New notebook created as "' + n + '" — rename it from the list when you like.');
+};
+document.getElementById('secNew').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const name = e.target.value.trim();
+  if (!name) return;
+  e.target.value = '';
+  await newPage(current.notebook, name, 'Page 1');
+});
+document.getElementById('pageAdd').onclick = () => {
+  const n = sheets.filter(s => s.notebook === current.notebook && s.section === current.section).length + 1;
+  newPage(current.notebook, current.section, 'Page ' + n);
+};
+
+/* which page to open first: the one you were on, else the newest */
+function pickStart() {
+  let last = null;
+  try { last = localStorage.getItem('showwork.last'); } catch {}
+  return sheets.find(s => s.id === last) || sheets.slice().sort((a, b) => b.updated - a.updated)[0];
+}
 
 /* ---- small helpers: say something, or show we're working ---- */
 const statusEl = document.getElementById('status');
@@ -838,7 +1275,17 @@ function busy(on, msg) {
   checkEl.textContent = on ? (msg || 'Working…') : 'Check my work';
 }
 
-fit();
+/* ============================================================
+   START — open the store, load the pages, open where you left off.
+   ============================================================ */
+(async () => {
+  fit();
+  const persistent = await store.init();
+  if (!persistent) document.getElementById('saveNote').textContent = 'Storage is blocked here — this session won\'t be saved';
+  sheets = await store.all();
+  if (!sheets.length) await newPage('My Notebook', 'Notes', 'Page 1');
+  else await openPage(pickStart());
+})();
 </script>
 </body>
 </html>
