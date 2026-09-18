@@ -8,7 +8,12 @@ routes = [{ pattern = "showwork.avery-keller.net", custom_domain = true }]
 # index.html is imported as a string in worker.js — one copy of the board, no assets folder.
 [[rules]]
 type = "Text"
-globs = ["**/*.html"]
+globs = ["**/*.html", "**/*.webmanifest", "**/sw.js"]
+fallthrough = true
+
+[[rules]]
+type = "Data"
+globs = ["**/*.png"]
 fallthrough = false
 
 # The key is NOT here. It is a secret:  wrangler secret put GEMINI_API_KEY

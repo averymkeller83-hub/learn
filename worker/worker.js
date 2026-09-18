@@ -14,6 +14,10 @@
 
 import html    from "../index.html";   // the board, as text — one copy, no assets dir
 import prompts from "../prompts.json"; // the two prompts — same file server.py reads
+import manifest from "../app/manifest.webmanifest";   // installable app: manifest, worker, icons
+import sw       from "../app/sw.js";
+import icon192  from "../app/icon-192.png";
+import icon512  from "../app/icon-512.png";
 
 // ============================================================
 // THE BRAIN — the swappable seam. Change the model here, nowhere else.
@@ -34,6 +38,10 @@ export default {
         return new Response(JSON.stringify(prompts), { headers: { "Content-Type": "application/json" } });
       }
       if (url.pathname === "/fetch") return fetchPage(url.searchParams.get("url") || "");
+      if (url.pathname === "/manifest.webmanifest") return new Response(manifest, { headers: { "Content-Type": "application/manifest+json" } });
+      if (url.pathname === "/sw.js") return new Response(sw, { headers: { "Content-Type": "application/javascript", "Cache-Control": "no-cache" } });
+      if (url.pathname === "/icon-192.png") return new Response(icon192, { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } });
+      if (url.pathname === "/icon-512.png") return new Response(icon512, { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } });
       return json(404, { error: "not_found" });
     }
 

@@ -156,6 +156,9 @@ class Board(SimpleHTTPRequestHandler):
         if path == "/prompts.json":                        # the browser needs them for bring-your-own-key
             self.path = "/prompts.json"
             return super().do_GET()
+        if path in ("/manifest.webmanifest", "/sw.js", "/icon-192.png", "/icon-512.png"):   # the installable-app files
+            self.path = "/app" + path
+            return super().do_GET()
         if path == "/fetch":                               # a linked web page, as readable text
             return self.fetch_page(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("url", [""])[0])
         self.send_error(404)

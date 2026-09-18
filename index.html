@@ -24,6 +24,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Showwork</title>
+<meta name="description" content="A free AI teacher that can see your notes.">
+<meta name="theme-color" content="#7719aa">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Showwork">
 <style>
   /* ============================================================
      THE PALETTE — muted, paper-like. The AI's amber is reserved:
@@ -2953,6 +2960,7 @@ redraw = function () { _redraw(); if (document.getElementById('zoomPct')) zoomLa
   else await openPage(pickStart());
   if (WIDE()) setSide(true);                         /* OneNote keeps its columns open on a wide screen */
   if (await msFinishSignIn()) showOnenote();         /* back from Microsoft? open the notebook picker */
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});   /* installable; shell opens offline */
 })();
 </script>
 </body>
