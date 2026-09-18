@@ -262,11 +262,11 @@ function redraw() {
   /* ---- the AI's ink: its own colour, its own layer, and only ---- */
   /* ---- as many characters as the animation has revealed      ---- */
   ctx.fillStyle = AI_INK;
-  ctx.font = '19px "Bradley Hand", "Segoe Script", "Comic Sans MS", cursive';
   ctx.textBaseline = 'top';
   for (const m of aiMarks) {
+    ctx.font = aiFont(m.size);
     const lines = m.text.slice(0, m.shown).split('\n');
-    lines.forEach((ln, i) => ctx.fillText(ln, m.x, m.y + i * 26));
+    lines.forEach((ln, i) => ctx.fillText(ln, m.x, m.y + i * m.size * 1.35));
   }
 
   ctx.restore();
@@ -391,7 +391,10 @@ cv.addEventListener('pointermove', e => {
   /* The Pencil samples far faster than the browser fires events; the
      in-between samples are handed over as "coalesced" events. Use them,
      or fast strokes come out as a few long straight lines. */
-  const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  /* (the list can come back EMPTY for synthetic or non-pen input — then
+     the event itself is the only sample, and must not be dropped) */
+  const coalesced = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
+  const events = coalesced && coalesced.length ? coalesced : [e];
   const from = drawing.pts.length;
   for (const ce of events) drawing.pts.push(pt(ce));
 
@@ -679,12 +682,33 @@ async function post(path, body) {
    person writes it: one character at a time, below your work,
    in ink that is only ever its own.
    ============================================================ */
+const aiFont = size => `${size}px "Bradley Hand", "Segoe Script", "Comic Sans MS", cursive`;
+
+/* ============================================================
+   handSize — how big the student writes, so the AI writes the same
+   size. The median height of their strokes is close to their letter
+   height (dashes and equals signs are too flat to count, so strokes
+   under 6px are ignored). Clamped so it never gets silly.
+   ============================================================ */
+function handSize() {
+  const hs = strokes.map(s => {
+    let lo = Infinity, hi = -Infinity;
+    for (const q of s.pts) { if (q.y < lo) lo = q.y; if (q.y > hi) hi = q.y; }
+    return hi - lo;
+  }).filter(h => h > 6).sort((a, b) => a - b);
+  if (!hs.length) return 19;
+  return Math.max(14, Math.min(72, hs[hs.length >> 1] * 0.95));
+}
+
 function write(text) {
   const box = bounds();
+  const size = handSize();
+  const width = Math.max(320, box ? box.maxX - box.minX : 0);   /* wrap to the work's width */
   const mark = {
     x: box ? box.minX : 60,
-    y: box ? box.maxY + 34 : 120,
-    text: wrap(text, 46),
+    y: box ? box.maxY + size * 1.2 : 120,
+    size,
+    text: wrap(text, width, size),
     shown: 0,
   };
   aiMarks.push(mark);
@@ -698,13 +722,15 @@ function write(text) {
   requestAnimationFrame(step);
 }
 
-function wrap(text, cols) {
+function wrap(text, maxWidth, size) {
+  ctx.font = aiFont(size);                 /* measure in the font it will be drawn in */
   return text.split('\n').map(para => {
     const out = [];
     let line = '';
     for (const word of para.split(' ')) {
-      if ((line + ' ' + word).trim().length > cols) { out.push(line.trim()); line = word; }
-      else line += ' ' + word;
+      const trial = (line + ' ' + word).trim();
+      if (line && ctx.measureText(trial).width > maxWidth) { out.push(line.trim()); line = word; }
+      else line = trial;
     }
     if (line.trim()) out.push(line.trim());
     return out.join('\n');
