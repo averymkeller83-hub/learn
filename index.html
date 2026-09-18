@@ -88,6 +88,13 @@
   button.primary:hover:not(:disabled) { background: #354f45; }
   button.icon { padding: 7px 10px; font-size: 16px; line-height: 1; }
 
+  /* the selection bar appears when something is circled */
+  #selBar { position: fixed; top: 104px; left: 50%; transform: translateX(-50%); z-index: 22; display: none; gap: 8px;
+            align-items: center; padding: 6px 8px 6px 12px; background: var(--ui); border: 1px solid var(--edge);
+            border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.09); font-size: 13px; color: var(--muted); }
+  #selBar.on { display: flex; }
+  #board.selecting { cursor: default; }
+
   /* the export menu drops from its button */
   #exportMenu { position: fixed; z-index: 21; display: none; flex-direction: column; gap: 4px; padding: 6px;
                 background: var(--ui); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.09); }
@@ -210,6 +217,7 @@
   <button class="act icon" id="sideBtn" title="Notebooks">☰</button>
   <div class="pens" id="pens"></div>
   <button class="act" id="eraser" aria-pressed="false" title="Eraser — touch a stroke to remove it">Eraser</button>
+  <button class="act" id="select" aria-pressed="false" title="Select — circle anything to move or delete it">Select</button>
   <div class="sep"></div>
   <button class="act" id="undo" title="Undo">Undo</button>
   <button class="act" id="clear" title="Clear the ink on this page (keeps the PDF)">Clear</button>
@@ -235,6 +243,11 @@
   </div>
   <p class="fine" id="keyState"></p>
 </div>
+<div id="selBar">
+  <span id="selCount"></span>
+  <button class="act" id="selDelete">Delete</button>
+  <button class="act" id="selDone">Done</button>
+</div>
 <div id="exportMenu">
   <button class="act" id="expPage">This page → image</button>
   <button class="act" id="expNotebook">This notebook → PDF</button>
@@ -257,6 +270,7 @@
   <h3>Pages</h3>
   <div class="list pages" id="pageList"></div>
   <div class="row"><button class="act" id="pageAdd" style="flex:1">+ New page</button></div>
+  <div class="row"><button class="act" id="examBtn" style="flex:1" title="A new page of practice problems on your topic">✎ Practice exam</button></div>
   <div class="foot" id="saveNote">Saved on this device</div>
 </aside>
 
@@ -281,7 +295,7 @@
 
 <div id="status"></div>
 <button class="act" id="showRead" hidden title="See or fix what was read from your handwriting">What I read ▸</button>
-<div id="hint">Pen or mouse draws · Eraser removes a stroke · two fingers pan and zoom</div>
+<div id="hint">Pen or mouse draws · Eraser removes a stroke · Select circles things to move or delete · two fingers pan and zoom</div>
 
 <script>
 /* ============================================================
@@ -307,6 +321,9 @@ let pen = PENS[0];
 let tool = 'pen';        /* 'pen' or 'eraser' */
 let drawing = null;      /* the stroke in progress */
 let erasing = null;      /* strokes removed during ONE eraser drag, for undo */
+let lasso = null;        /* the loop being drawn with the Select tool */
+let selection = null;    /* {strokes:[], marks:[], lines:[]} — what the loop caught */
+let moving = null;       /* {last:{x,y}, dx, dy} while dragging a selection */
 
 /* history[] is what undo walks. Every action is either
      {type:'add',   stroke}          — a stroke was drawn
@@ -364,7 +381,28 @@ function redraw() {
   ctx.translate(pan.x, pan.y);
   ctx.scale(zoom, zoom);
   paint(ctx, {shadows: true});
+  drawSelection(ctx);
   ctx.restore();
+}
+
+/* the loop while you draw it, and a dashed box around what it caught */
+function drawSelection(c) {
+  c.save();
+  c.setLineDash([6 / zoom, 5 / zoom]);
+  c.lineWidth = 1.5 / zoom;
+  c.strokeStyle = getCSS('--accent');
+  if (lasso && lasso.length > 1) {
+    c.beginPath(); c.moveTo(lasso[0].x, lasso[0].y);
+    for (const q of lasso) c.lineTo(q.x, q.y);
+    c.closePath(); c.stroke();
+  }
+  const b = selectionBox();
+  if (b) {
+    c.fillStyle = 'rgba(63,93,82,.06)';
+    c.fillRect(b.minX - 8, b.minY - 8, b.maxX - b.minX + 16, b.maxY - b.minY + 16);
+    c.strokeRect(b.minX - 8, b.minY - 8, b.maxX - b.minX + 16, b.maxY - b.minY + 16);
+  }
+  c.restore();
 }
 
 /* ============================================================
@@ -480,6 +518,18 @@ cv.addEventListener('pointerdown', e => {
   if (e.pointerType === 'pen') penSeen = true;
   panFrom = null; pinch = null; touches.clear();   /* pen wins over fingers */
 
+  /* select: inside the selected box, a drag MOVES it; anywhere else, a new loop */
+  if (tool === 'select') {
+    const p = pt(e), b = selectionBox();
+    if (b && p.x >= b.minX - 8 && p.x <= b.maxX + 8 && p.y >= b.minY - 8 && p.y <= b.maxY + 8) {
+      moving = {last: p, dx: 0, dy: 0};
+    } else {
+      setSelection(null);
+      lasso = [p];
+    }
+    return;
+  }
+
   /* eraser: the toolbar toggle, OR the eraser end of a pen that has one
      (button 5 / buttons bit 32 — Surface, Wacom). Apple Pencil has neither,
      which is why the toggle exists. */
@@ -518,6 +568,12 @@ cv.addEventListener('pointermove', e => {
   }
 
   lastPenAt = performance.now();
+  if (moving) {                                     /* drag the selection along */
+    const p = pt(e), dx = p.x - moving.last.x, dy = p.y - moving.last.y;
+    shiftSelection(dx, dy); moving.dx += dx; moving.dy += dy; moving.last = p;
+    return redraw();
+  }
+  if (lasso) { lasso.push(pt(e)); return redraw(); }
   if (erasing) return eraseAt(pt(e));
   if (!drawing) return;
 
@@ -555,6 +611,16 @@ function done(e) {
     }
     dirty();                                     /* pan/zoom are saved too */
     return;
+  }
+  if (moving) {                                    /* a move is one undo step */
+    if (moving.dx || moving.dy) { history.push({type: 'move', sel: selection, dx: moving.dx, dy: moving.dy}); dirty(); }
+    moving = null;
+    return redraw();
+  }
+  if (lasso) {                                     /* close the loop, see what it caught */
+    const loop = lasso; lasso = null;
+    setSelection(loop.length > 2 ? pick(loop) : null);
+    return redraw();
   }
   if (erasing) {                                   /* one drag = one undo step */
     if (erasing.length) { history.push({type: 'erase', strokes: erasing}); dirty(); }
@@ -613,6 +679,76 @@ function segDist(a, b, p) {
   return Math.hypot(p.x - qx, p.y - qy);
 }
 
+/* ============================================================
+   SELECT — circle anything, then move it or delete it.
+   A stroke is caught when most of its points are inside the loop; the
+   AI's text when the middle of its box is; a strike-through when its
+   midpoint is. Moving shifts the caught things' coordinates; deleting
+   pulls them out of their lists. Both are one undo step each.
+   ============================================================ */
+function inside(loop, p) {                     /* ray casting: is p inside the polygon? */
+  let hit = false;
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const a = loop[i], b = loop[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) hit = !hit;
+  }
+  return hit;
+}
+function markBox(m) {
+  ctx.font = aiFont(m.size);
+  const lines = m.text.split('\n');
+  const w = Math.max(...lines.map(l => ctx.measureText(l).width));
+  return {minX: m.x, minY: m.y, maxX: m.x + w, maxY: m.y + lines.length * m.size * 1.35};
+}
+function pick(loop) {
+  const sel = {
+    strokes: strokes.filter(s => s.pts.filter(q => inside(loop, q)).length * 2 >= s.pts.length),
+    marks: aiMarks.filter(m => { const b = markBox(m); return inside(loop, {x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2}); }),
+    lines: aiLines.filter(l => inside(loop, {x: (l.x1 + l.x2) / 2, y: (l.y1 + l.y2) / 2})),
+  };
+  return (sel.strokes.length + sel.marks.length + sel.lines.length) ? sel : null;
+}
+function selectionBox() {
+  if (!selection) return null;
+  let b = null;
+  for (const s of selection.strokes) for (const q of s.pts) b = union(b, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y});
+  for (const m of selection.marks) b = union(b, markBox(m));
+  for (const l of selection.lines) b = union(b, {minX: Math.min(l.x1, l.x2), minY: Math.min(l.y1, l.y2), maxX: Math.max(l.x1, l.x2), maxY: Math.max(l.y1, l.y2)});
+  return b;
+}
+function shiftSelection(dx, dy, sel = selection) {
+  if (!sel) return;
+  for (const s of sel.strokes) for (const q of s.pts) { q.x += dx; q.y += dy; }
+  for (const m of sel.marks) { m.x += dx; m.y += dy; }
+  for (const l of sel.lines) { l.x1 += dx; l.x2 += dx; l.y1 += dy; l.y2 += dy; }
+}
+const selBar = document.getElementById('selBar');
+function setSelection(sel) {
+  selection = sel;
+  selBar.classList.toggle('on', !!sel);
+  if (sel) {
+    const n = sel.strokes.length + sel.marks.length + sel.lines.length;
+    document.getElementById('selCount').textContent = n + (n === 1 ? ' thing' : ' things') + ' selected';
+  }
+  redraw();
+}
+function deleteSelection() {
+  if (!selection) return;
+  const sel = selection;
+  for (const s of sel.strokes) { const i = strokes.indexOf(s); if (i >= 0) strokes.splice(i, 1); }
+  for (const m of sel.marks)   { const i = aiMarks.indexOf(m); if (i >= 0) aiMarks.splice(i, 1); }
+  for (const l of sel.lines)   { const i = aiLines.indexOf(l); if (i >= 0) aiLines.splice(i, 1); }
+  history.push({type: 'delete', sel});
+  setSelection(null); dirty();
+}
+document.getElementById('selDelete').onclick = deleteSelection;
+document.getElementById('selDone').onclick = () => setSelection(null);
+addEventListener('keydown', e => {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selection && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) {
+    e.preventDefault(); deleteSelection();
+  }
+});
+
 /* a mouse can't pan by dragging (dragging draws), so the wheel / trackpad
    does. A trackpad pinch arrives as a wheel with ctrlKey — that zooms. */
 cv.addEventListener('wheel', e => {
@@ -658,11 +794,16 @@ PENS.forEach((c, i) => {
 });
 
 const eraserBtn = document.getElementById('eraser');
+const selectBtn = document.getElementById('select');
 eraserBtn.onclick = () => setTool(tool === 'eraser' ? 'pen' : 'eraser');
+selectBtn.onclick = () => setTool(tool === 'select' ? 'pen' : 'select');
 function setTool(t) {
   tool = t;
   eraserBtn.setAttribute('aria-pressed', t === 'eraser');
+  selectBtn.setAttribute('aria-pressed', t === 'select');
   cv.classList.toggle('erasing', t === 'eraser');
+  cv.classList.toggle('selecting', t === 'select');
+  if (t !== 'select') { lasso = null; setSelection(null); }
 }
 
 /* undo reverses the LAST ACTION — a drawn stroke, or everything one
@@ -673,15 +814,20 @@ document.getElementById('undo').onclick = () => {
   if (last.type === 'add') {
     const i = strokes.indexOf(last.stroke);
     if (i >= 0) strokes.splice(i, 1);
-  } else {
+  } else if (last.type === 'erase') {
     strokes.push(...last.strokes);
+  } else if (last.type === 'delete') {          /* put back everything the lasso removed */
+    strokes.push(...last.sel.strokes); aiMarks.push(...last.sel.marks); aiLines.push(...last.sel.lines);
+  } else if (last.type === 'move') {            /* slide it back where it was */
+    shiftSelection(-last.dx, -last.dy, last.sel);
   }
+  setSelection(null);
   redraw();
   dirty();
 };
 document.getElementById('clear').onclick = () => {
   strokes.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0;
-  redraw(); say(''); showRead.hidden = true;
+  setSelection(null); say(''); showRead.hidden = true;
   dirty();
 };
 
@@ -1379,6 +1525,41 @@ document.getElementById('secNew').addEventListener('keydown', async e => {
 document.getElementById('pageAdd').onclick = () => {
   const n = sheets.filter(s => s.notebook === current.notebook && s.section === current.section).length + 1;
   newPage(current.notebook, current.section, 'Page ' + n);
+};
+
+/* ============================================================
+   PRACTICE EXAM — a fresh page of problems on whatever you're working
+   on. The tutor writes five problems (no solutions, no hints); they
+   land on a NEW page in this section, in its ink, with room under each
+   to work. Then it's Check my work, one problem at a time.
+   ============================================================ */
+document.getElementById('examBtn').onclick = async () => {
+  const t = topic() || titleEl.value.trim();
+  if (!t) return say("Type what you're working on in the topic line first.", true);
+  sideEl.classList.remove('open');
+  say('Writing a practice exam on ' + t + '…');
+  try {
+    const r = await api('/chat', {image: null, context: t, messages: [{role: 'user', text:
+      `Write a practice exam of 5 problems on: ${t}. Match the difficulty of a college homework set on this topic. ` +
+      `Put ALL five problems in "board", numbered "1." to "5.", ONE problem per line, plain-text math, NO solutions and NO hints. ` +
+      `In "say", one sentence telling me to work them on the page and check each one.`}]});
+    const lines = (r.board || '').split('\n').map(l => l.trim()).filter(l => /^\d+[.)]/.test(l) || l.length > 3);
+    if (!lines.length) throw new Error('no problems came back');
+
+    await newPage(current.notebook, current.section, 'Practice — ' + t.slice(0, 40));
+    topicEl.value = t;
+    const size = 24, ROOM = 170;                    /* ~4 lines of handwriting under each problem */
+    let y = 40;
+    for (const line of lines) {
+      const text = wrap(line, 900, size);
+      aiMarks.push({x: 60, y, size, text, shown: text.length});
+      y += text.split('\n').length * size * 1.35 + ROOM;
+    }
+    pan = {x: 0, y: 110}; zoom = 1;
+    chat.push({role: 'ai', text: (r.say || '').trim() || 'Work these on the page, then check each one.'});
+    redraw(); renderChat(); dirty();
+    say(lines.length + ' problems on the page. Work them, then Check my work.');
+  } catch (e) { say('Could not make the exam: ' + e.message, true); }
 };
 
 /* which page to open first: the one you were on, else the newest */
