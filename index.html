@@ -110,6 +110,16 @@
   #panel .row { display: flex; gap: 8px; margin-top: 11px; }
   #panel .row button { flex: 1; }
 
+  /* the topic line: tells the model what the problem IS, so it isn't reading blind */
+  #topic {
+    position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+    width: min(480px, calc(100vw - 32px)); z-index: 9;
+    padding: 7px 12px; border-radius: 9px; font: inherit; font-size: 13.5px;
+    color: var(--text); background: var(--ui); border: 1px solid var(--edge);
+    -webkit-user-select: text; user-select: text;
+  }
+  #topic::placeholder { color: var(--muted); }
+
   #status {
     position: fixed; left: 16px; bottom: 14px; z-index: 10;
     font-size: 13px; color: var(--muted); max-width: 60vw;
@@ -136,6 +146,8 @@
   <button class="act primary" id="check">Check my work</button>
 </div>
 
+<input id="topic" placeholder="What are you working on? e.g. M220 — tangent lines with the power rule" autocomplete="off" spellcheck="false">
+
 <div id="panel">
   <h2>Here's what I read</h2>
   <p class="why">Fix anything I got wrong before I say a word about it. Where I wasn't sure, my other guess is in [brackets] — keep the right one.</p>
@@ -147,7 +159,7 @@
 </div>
 
 <div id="status"></div>
-<div id="hint">Pen or mouse draws · Eraser removes a stroke · finger or scroll pans</div>
+<div id="hint">Pen or mouse draws · Eraser removes a stroke · one finger pans · two fingers zoom</div>
 
 <script>
 /* ============================================================
@@ -175,10 +187,14 @@ let erasing = null;      /* strokes removed during ONE eraser drag, for undo */
    so undo can put back exactly what one gesture took away. */
 const history = [];
 let pan = {x: 0, y: 0};  /* how far the board has been dragged */
+let zoom = 1;            /* 1 = life size; pinch or trackpad changes it */
 let panFrom = null;      /* where a finger-drag started */
+const touches = new Map();  /* live fingers, id -> {x,y}; two of them = a pinch */
+let pinch = null;           /* {dist, mid, zoom0, pan0} while two fingers are down */
 
 const cv  = document.getElementById('board');
 const ctx = cv.getContext('2d');
+const PAPER = getCSS('--paper'), RULE = getCSS('--line');   /* read once, not per frame */
 
 /* ============================================================
    fit — size the canvas to the window at real device resolution.
@@ -209,18 +225,19 @@ function redraw() {
   ctx.clearRect(0, 0, innerWidth, innerHeight);
 
   /* ---- the ruled paper, so it reads as a place to write ---- */
-  ctx.fillStyle = getCSS('--paper');
+  ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, innerWidth, innerHeight);
-  ctx.strokeStyle = getCSS('--line');
+  ctx.strokeStyle = RULE;
   ctx.lineWidth = 1;
   const GAP = 38;
   for (let y = (pan.y % GAP + GAP) % GAP; y < innerHeight; y += GAP) {
     ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(innerWidth, y + .5); ctx.stroke();
   }
 
-  /* ---- everything below this moves with the pan ---- */
+  /* ---- everything below this moves with the pan and scales with the zoom ---- */
   ctx.save();
   ctx.translate(pan.x, pan.y);
+  ctx.scale(zoom, zoom);
 
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -241,13 +258,29 @@ function redraw() {
 }
 
 function drawStroke(s) {
-  if (s.pts.length < 2) return;
   ctx.strokeStyle = s.color;
   ctx.lineWidth = s.width;
   ctx.beginPath();
-  ctx.moveTo(s.pts[0].x, s.pts[0].y);
-  for (let i = 1; i < s.pts.length; i++) ctx.lineTo(s.pts[i].x, s.pts[i].y);
+  tracePath(ctx, s.pts);
   ctx.stroke();
+}
+
+/* ============================================================
+   tracePath — the shape of a stroke, shared by the screen and the
+   snapshot so they can never disagree. Straight lines between pen
+   samples look like a polygon; a curve through each midpoint, bent
+   toward the sample, reads as ink. One point = a dot (round caps).
+   ============================================================ */
+function tracePath(c, pts) {
+  if (!pts.length) return;
+  c.moveTo(pts[0].x, pts[0].y);
+  if (pts.length < 3) { for (const q of pts) c.lineTo(q.x, q.y); return; }
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
+    c.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+  }
+  const l = pts[pts.length - 1];
+  c.lineTo(l.x, l.y);
 }
 
 function getCSS(name) {
@@ -263,13 +296,33 @@ function getCSS(name) {
    That is real palm rejection. You can rest your hand on the
    screen while you write, the way you do on paper.
    ============================================================ */
+let lastPenAt = 0;       /* when the pen last touched — a palm lands right after */
+const PALM_MS = 600;     /* a finger inside this window of pen contact is a palm */
+
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
 
-  if (e.pointerType === 'touch') {           /* a finger: move the paper */
-    panFrom = {x: e.clientX - pan.x, y: e.clientY - pan.y};
+  if (e.pointerType === 'touch') {
+    /* A finger while the pen is down, or right after it lifted, is your
+       palm — not a request to move the paper. Ignore it completely.
+       Without this the board slid under the pen mid-word. */
+    if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;
+
+    touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if (touches.size === 2) {                /* second finger: a pinch begins */
+      const [a, b] = [...touches.values()];
+      pinch = {dist: Math.hypot(a.x - b.x, a.y - b.y),
+               mid: {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2},
+               zoom0: zoom, pan0: {...pan}};
+      panFrom = null;
+    } else if (touches.size === 1) {         /* one finger: move the paper */
+      panFrom = {x: e.clientX - pan.x, y: e.clientY - pan.y};
+    }
     return;
   }
+
+  lastPenAt = performance.now();
+  panFrom = null; pinch = null; touches.clear();   /* pen wins over fingers */
 
   /* eraser: the toolbar toggle, OR the eraser end of a pen that has one
      (button 5 / buttons bit 32 — Surface, Wacom). Apple Pencil has neither,
@@ -285,26 +338,74 @@ cv.addEventListener('pointerdown', e => {
 });
 
 cv.addEventListener('pointermove', e => {
-  if (panFrom && e.pointerType === 'touch') {
-    pan = {x: e.clientX - panFrom.x, y: e.clientY - panFrom.y};
-    return redraw();
+  if (e.pointerType === 'touch') {
+    if (!touches.has(e.pointerId)) return;   /* a palm we chose to ignore */
+    touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
+
+    if (pinch && touches.size === 2) {
+      /* zoom by how much the fingers spread; keep the board point that
+         was under the fingers' midpoint pinned under it as they move */
+      const [a, b] = [...touches.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const mid  = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
+      zoom = Math.min(6, Math.max(0.25, pinch.zoom0 * dist / pinch.dist));
+      const bx = (pinch.mid.x - pinch.pan0.x) / pinch.zoom0;   /* board point under mid0 */
+      const by = (pinch.mid.y - pinch.pan0.y) / pinch.zoom0;
+      pan = {x: mid.x - bx * zoom, y: mid.y - by * zoom};
+      return redraw();
+    }
+    if (panFrom) {
+      pan = {x: e.clientX - panFrom.x, y: e.clientY - panFrom.y};
+      return redraw();
+    }
+    return;
   }
+
+  lastPenAt = performance.now();
   if (erasing) return eraseAt(pt(e));
   if (!drawing) return;
-  drawing.pts.push(pt(e));
-  redraw();
+
+  /* The Pencil samples far faster than the browser fires events; the
+     in-between samples are handed over as "coalesced" events. Use them,
+     or fast strokes come out as a few long straight lines. */
+  const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  const from = drawing.pts.length;
+  for (const ce of events) drawing.pts.push(pt(ce));
+
+  /* Draw only the new bit of THIS stroke, not the whole board again.
+     A full redraw per sample is what made ink trail behind the pen. */
+  ctx.save();
+  ctx.translate(pan.x, pan.y);
+  ctx.scale(zoom, zoom);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = drawing.color; ctx.lineWidth = drawing.width;
+  ctx.beginPath();
+  tracePath(ctx, drawing.pts.slice(Math.max(0, from - 2)));
+  ctx.stroke();
+  ctx.restore();
 });
 
 function done(e) {
-  if (e.pointerType === 'touch') { panFrom = null; return; }
+  if (e.pointerType === 'touch') {
+    touches.delete(e.pointerId);
+    if (touches.size < 2) pinch = null;
+    if (touches.size === 0) panFrom = null;
+    else if (touches.size === 1) {           /* one finger left: it can keep panning */
+      const t = [...touches.values()][0];
+      panFrom = {x: t.x - pan.x, y: t.y - pan.y};
+    }
+    return;
+  }
   if (erasing) {                                   /* one drag = one undo step */
     if (erasing.length) history.push({type: 'erase', strokes: erasing});
     erasing = null;
     return redraw();
   }
-  if (drawing && drawing.pts.length > 1) {
+  if (drawing) {
+    if (drawing.pts.length === 1) drawing.pts.push({...drawing.pts[0]});   /* a tap = a dot */
     strokes.push(drawing);
     history.push({type: 'add', stroke: drawing});
+    lastPenAt = performance.now();
   }
   drawing = null;
   redraw();
@@ -320,7 +421,7 @@ const ERASER_R = 12;
 function eraseAt(p) {
   let hit = false;
   for (let i = strokes.length - 1; i >= 0; i--) {
-    if (strokeNear(strokes[i], p, ERASER_R)) {
+    if (strokeNear(strokes[i], p, ERASER_R / zoom)) {
       erasing.push(strokes.splice(i, 1)[0]);
       hit = true;
     }
@@ -348,17 +449,31 @@ function segDist(a, b, p) {
 }
 cv.addEventListener('pointerup', done);
 cv.addEventListener('pointercancel', done);
-cv.addEventListener('pointerleave', done);
+/* NOT pointerleave: with pointer capture the up still arrives, and ending
+   a stroke the moment the pen crossed the edge cut words in half. */
 
-/* a mouse can't pan by dragging (dragging draws), so the wheel / trackpad does */
+/* a mouse can't pan by dragging (dragging draws), so the wheel / trackpad
+   does. A trackpad pinch arrives as a wheel with ctrlKey — that zooms. */
 cv.addEventListener('wheel', e => {
   e.preventDefault();
-  pan = {x: pan.x - e.deltaX, y: pan.y - e.deltaY};
+  if (e.ctrlKey || e.metaKey) {
+    const factor = Math.exp(-e.deltaY * 0.01);
+    zoomAt(e.clientX, e.clientY, Math.min(6, Math.max(0.25, zoom * factor)));
+  } else {
+    pan = {x: pan.x - e.deltaX, y: pan.y - e.deltaY};
+  }
   redraw();
 }, {passive: false});
 
-/* the point, in board space — so pan doesn't smear the ink */
-const pt = e => ({x: e.clientX - pan.x, y: e.clientY - pan.y});
+/* change zoom while keeping the board point under (sx, sy) where it is */
+function zoomAt(sx, sy, z) {
+  const bx = (sx - pan.x) / zoom, by = (sy - pan.y) / zoom;
+  zoom = z;
+  pan = {x: sx - bx * zoom, y: sy - by * zoom};
+}
+
+/* the point, in board space — pan and zoom undone, so ink lands where the pen is */
+const pt = e => ({x: (e.clientX - pan.x) / zoom, y: (e.clientY - pan.y) / zoom});
 const penWidth = e => (e.pressure > 0 && e.pointerType === 'pen')
   ? 1.2 + e.pressure * 3.4 : 2.4;
 
@@ -431,13 +546,12 @@ function snapshot() {
   o.lineCap = 'round'; o.lineJoin = 'round';
 
   for (const s of strokes) {
-    if (s.pts.length < 2) continue;
     o.strokeStyle = s.color; o.lineWidth = s.width;
-    o.beginPath(); o.moveTo(s.pts[0].x, s.pts[0].y);
-    for (let i = 1; i < s.pts.length; i++) o.lineTo(s.pts[i].x, s.pts[i].y);
-    o.stroke();
+    o.beginPath(); tracePath(o, s.pts); o.stroke();
   }
-  return {url: off.toDataURL('image/png'), box};
+  /* JPEG, not PNG: a fifth of the bytes to upload, and black ink on white
+     paper survives compression fine. That upload was most of the wait. */
+  return {url: off.toDataURL('image/jpeg', 0.85), box};
 }
 
 function bounds() {
@@ -458,13 +572,19 @@ const readEl  = document.getElementById('read');
 const checkEl = document.getElementById('check');
 let shot = null;                       /* the picture both calls share */
 
+/* the topic is a per-device convenience: remember it, but never depend on it */
+const topicEl = document.getElementById('topic');
+try { topicEl.value = localStorage.getItem('showwork.topic') || ''; } catch {}
+topicEl.addEventListener('input', () => { try { localStorage.setItem('showwork.topic', topicEl.value); } catch {} });
+const topic = () => topicEl.value.trim();
+
 checkEl.onclick = async () => {
   shot = snapshot();
   if (!shot) return say('Write something first.', true);
 
   busy(true, 'Reading your work…');
   try {
-    const r = await post('/transcribe', {image: shot.url});
+    const r = await post('/transcribe', {image: shot.url, context: topic()});
     readEl.value = r.transcription;
     panel.classList.add('on');
     readEl.focus();
@@ -479,7 +599,7 @@ document.getElementById('confirm').onclick = async () => {
   panel.classList.remove('on');
   busy(true, 'Looking for the first thing to fix…');
   try {
-    const v = await post('/check', {image: shot.url, work: readEl.value});
+    const v = await post('/check', {image: shot.url, work: readEl.value, context: topic()});
     write(v.all_correct
       ? "Nothing wrong here.\nThis is all correct."
       : `${v.problem}\n${v.nudge}`);

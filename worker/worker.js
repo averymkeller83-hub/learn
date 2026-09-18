@@ -45,15 +45,20 @@ export default {
     // ---- read {"image": "data:image/png;base64,...", "work"?: "..."} ----
     let data;
     try { data = await request.json(); } catch { return json(400, { error: "bad_request", message: "not JSON" }); }
-    const b64 = (data.image || "").split(",", 2)[1];
+    const [head, b64] = (data.image || "").split(",", 2);   // "data:image/jpeg;base64"
     if (!b64) return json(400, { error: "bad_request", message: "no image" });
+    const mime = head.slice(5).split(";")[0] || "image/png"; // the board sends JPEG now
+
+    // what the student says they're working on — goes in FRONT of either prompt
+    const ctx  = String(data.context || "").trim().slice(0, 300);
+    const note = ctx ? prompts.context_note.replace("{context}", ctx) : "";
 
     try {
       // ============================================
       // /transcribe — "what does this say?"
       // ============================================
       if (url.pathname === "/transcribe") {
-        const text = await askVision(env, prompts.transcribe, b64);
+        const text = await askVision(env, note + prompts.transcribe, b64, mime);
         return json(200, { transcription: text.trim(), checks_left: null });
       }
 
@@ -65,7 +70,7 @@ export default {
       const work = (data.work || "").trim();
       if (!work) return json(400, { error: "no_work", message: "Confirm the transcription first." });
 
-      const raw = await askVision(env, prompts.check.replace("{work}", work), b64);
+      const raw = await askVision(env, note + prompts.check.replace("{work}", work), b64, mime);
 
       // asked for JSON; if it obliged pass it through, if it rambled hand the ramble over
       let verdict;
@@ -87,13 +92,13 @@ export default {
 // askVision — the phone line to the brain, with a picture attached.
 // IN: env (for the key), a prompt, the PNG as base64.  OUT: words.
 // ============================================================
-async function askVision(env, prompt, b64) {
+async function askVision(env, prompt, b64, mime = "image/png") {
   const res = await fetch(ASK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
     body: JSON.stringify({ contents: [{ parts: [
       { text: prompt },
-      { inline_data: { mime_type: "image/png", data: b64 } },
+      { inline_data: { mime_type: mime, data: b64 } },
     ]}]}),
   });
   if (!res.ok) {

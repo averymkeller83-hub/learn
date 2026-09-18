@@ -65,14 +65,14 @@ CHECK_PROMPT = PROMPTS["check"]          # contains {work}, filled in below
 # IN:  a prompt, and the board as PNG bytes
 # OUT: whatever the model said, as text
 # ============================================================
-def ask_vision(prompt, png_bytes):
+def ask_vision(prompt, img_bytes, mime="image/png"):
     """Send one image and one question. Get words back."""
 
     # ---- the picture rides as base64 text inside the JSON ----
     body = json.dumps({"contents": [{"parts": [
         {"text": prompt},
-        {"inline_data": {"mime_type": "image/png",
-                         "data": base64.b64encode(png_bytes).decode()}},
+        {"inline_data": {"mime_type": mime,
+                         "data": base64.b64encode(img_bytes).decode()}},
     ]}]})
 
     req = urllib.request.Request(ASK_URL, data=body.encode(), headers={
@@ -157,18 +157,25 @@ class Board(SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         try:
             data = json.loads(self.rfile.read(length))
-            png = base64.b64decode(data["image"].split(",", 1)[1])
+            head, b64 = data["image"].split(",", 1)          # "data:image/jpeg;base64"
+            mime = head[5:].split(";")[0] or "image/png"      # the board sends JPEG now
+            png = base64.b64decode(b64)
         except (ValueError, KeyError, IndexError) as e:
             return self.reply(400, {"error": "bad_request", "message": str(e)})
 
         Board.checks_used += 1
+
+        # ---- what the student says they're working on, if anything. It goes ----
+        # ---- in FRONT of either prompt so the model isn't reading blind.      ----
+        ctx = (data.get("context") or "").strip()[:300]
+        note = PROMPTS["context_note"].replace("{context}", ctx) if ctx else ""
 
         try:
             # ============================================
             # /transcribe — "what does this say?"
             # ============================================
             if self.path == "/transcribe":
-                text = ask_vision(TRANSCRIBE_PROMPT, png)
+                text = ask_vision(note + TRANSCRIBE_PROMPT, png, mime)
                 return self.reply(200, {
                     "transcription": text.strip(),
                     "checks_left": CHECK_BUDGET - Board.checks_used})
@@ -184,7 +191,7 @@ class Board(SimpleHTTPRequestHandler):
                     "error": "no_work",
                     "message": "Confirm the transcription first."})
 
-            raw = ask_vision(CHECK_PROMPT.replace("{work}", work), png)
+            raw = ask_vision(note + CHECK_PROMPT.replace("{work}", work), png, mime)
 
             # ---- the model was asked for JSON. If it obliged, pass it ----
             # ---- through. If it rambled, hand the ramble over rather  ----
