@@ -217,7 +217,7 @@ class Board(SimpleHTTPRequestHandler):
                 raw = ask(chat_body(note + PROMPTS["chat"], msgs, png, mime))
                 try:
                     out = json.loads(strip_fence(raw))
-                    say, board = str(out.get("say", "")), str(out.get("board", "") or "")
+                    say, board = str(out.get("say", "")), out.get("board", "") or ""   # a string or a list of steps
                 except (ValueError, AttributeError):
                     say, board = raw.strip(), ""
                 return self.reply(200, {"say": say, "board": board,

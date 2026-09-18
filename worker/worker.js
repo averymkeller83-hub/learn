@@ -67,7 +67,7 @@ export default {
         if (!msgs.length) return json(400, { error: "no_message", message: "Say something first." });
         const raw = await askGemini(env, chatBody(note + prompts.chat, msgs, b64, mime));
         let say = raw.trim(), board = "";
-        try { const out = JSON.parse(stripFence(raw)); say = String(out.say || ""); board = String(out.board || ""); } catch {}
+        try { const out = JSON.parse(stripFence(raw)); say = String(out.say || ""); board = out.board ?? ""; } catch {}   // string or a list of steps
         return json(200, { say, board, checks_left: null });
       }
 
