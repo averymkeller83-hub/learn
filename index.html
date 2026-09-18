@@ -79,6 +79,16 @@
                cursor: pointer; height: 100%; border-bottom: 3px solid transparent; }
   .rtop .tab[aria-selected="true"] { color: #fff; border-bottom-color: #fff; font-weight: 600; }
   .rtop .grow { flex: 1; }
+  .rtop .act { padding: 6px 11px; }
+  .rtop .ibtn[aria-pressed="true"] { background: rgba(255,255,255,.22); }
+  /* Narrow: the three that matter keep their place; the tab row folds behind ☰
+     and labels drop to icons. Tools are optional; these are not. */
+  @media (max-width: 860px) {
+    .rtop .tabs { display: none; }
+    body.tabs-open .rtop .tabs { display: flex; position: fixed; top: 44px; left: 0; right: 0; height: 40px; background: var(--accent); z-index: 21; }
+    body.tabs-open .rpanel { margin-top: 40px; }
+  }
+  @media (max-width: 620px) { .rtop .act .lbl { display: none; } .rtop .act svg { margin-right: 0 !important; } .rtop .app { display: none; } }
   .rtop .ibtn { border: 0; background: transparent; color: #fff; width: 36px; height: 36px; border-radius: 6px; cursor: pointer; display: grid; place-items: center; }
   .rtop .ibtn svg { width: 20px; height: 20px; }
   .rtop .ibtn:hover { background: rgba(255,255,255,.14); }
@@ -300,6 +310,22 @@
   #settings .opt { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); margin-bottom: 4px; }
   #settings .opt input { margin-top: 3px; } #settings .opt code { background: #efe9f5; padding: 0 4px; border-radius: 4px; }
 
+  /* ============================================================
+     THE WALK-THROUGH — four pointer bubbles, each asking for one real
+     action on the real page. Never a modal: the page stays usable, and
+     Skip is always there. Remembered per device once finished.
+     ============================================================ */
+  #coach { position: fixed; z-index: 40; max-width: 340px; }
+  #coach .bubble { background: var(--ui); border: 1px solid var(--edge); border-radius: 12px; box-shadow: 0 6px 28px rgba(0,0,0,.16); padding: 14px 16px 12px; }
+  #coach p { margin: 0 0 10px; font-size: 14px; line-height: 1.5; }
+  #coach .row { display: flex; gap: 8px; }
+  #coach .row button { flex: 1; }
+  #coach .dots { display: flex; gap: 5px; justify-content: center; margin-top: 10px; }
+  #coach .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--edge); }
+  #coach .dots i.on { background: var(--accent); }
+  #coach .arrow { position: absolute; width: 14px; height: 14px; background: var(--ui); border-left: 1px solid var(--edge); border-top: 1px solid var(--edge); transform: rotate(45deg); }
+  .coach-target { position: relative; z-index: 41; box-shadow: 0 0 0 3px var(--accent), 0 0 0 9px rgba(119,25,170,.22); border-radius: 10px; }
+
   #status { position: fixed; left: 16px; bottom: 14px; z-index: 10; font-size: 13px; color: var(--muted); max-width: 50vw; }
   #status.bad { color: #a33; }
   #showRead { position: fixed; left: 16px; bottom: 40px; z-index: 10; font-size: 12.5px; padding: 5px 10px; }
@@ -388,13 +414,12 @@
       <button class="tab" data-tab="view">View</button>
     </div>
     <div class="grow"></div>
-    <button class="act primary" id="check"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#f-checkmark_circle"/></svg>Check my work</button>
+    <button class="act" id="teachBtn" title="Learn something new — the tutor plans a lesson and teaches it step by step"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#f-hat_graduation"/></svg><span class="lbl">Teach me…</span></button>
+    <button class="act primary" id="check"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#f-checkmark_circle"/></svg><span class="lbl">Check my work</span></button>
+    <button class="ibtn" id="chatBtn" aria-pressed="false" title="Talk to the tutor"><svg width="20" height="20"><use href="#f-chat"/></svg></button>
   </div>
 
   <div class="rpanel" data-panel="home">
-    <div class="group">
-      <button class="rbtn" id="teachBtn" title="Learn something new — the tutor plans a lesson and teaches it step by step"><svg><use href="#f-hat_graduation"/></svg><span>Teach me…</span></button>
-    </div>
     <div class="group">
       <button class="rbtn" id="undo2"  title="Undo"><svg><use href="#f-arrow_undo"/></svg><span>Undo</span></button>
       <button class="rbtn" id="redo2"  title="Redo"><svg><use href="#f-arrow_redo"/></svg><span>Redo</span></button>
@@ -427,7 +452,6 @@
       <button class="rbtn" id="readBtn" aria-pressed="false" title="Read aloud"><svg><use href="#f-immersive_reader"/></svg><span>Read aloud</span></button>
     </div>
     <div class="group">
-      <button class="rbtn" id="chatBtn" aria-pressed="false" title="Tutor"><svg><use href="#f-chat"/></svg><span>Tutor</span></button>
       <button class="rbtn" id="exportBtn"  title="Export"><svg><use href="#f-share"/></svg><span>Export</span></button>
       <button class="rbtn" id="setBtn"  title="Settings"><svg><use href="#f-settings"/></svg><span>Settings</span></button>
     </div>
@@ -632,6 +656,17 @@
   </div>
 </div>
 
+<div id="coach" hidden>
+  <div class="bubble">
+    <p id="coachText"></p>
+    <div class="row">
+      <button class="act" id="coachSkip">Skip</button>
+      <button class="act primary" id="coachNext">Next</button>
+    </div>
+    <div class="dots" id="coachDots"></div>
+  </div>
+</div>
+
 <div id="status"></div>
 <button class="act" id="showRead" hidden title="See or fix what was read from your handwriting">What I read ▸</button>
 <div id="hint">Draw: pen or mouse · Insert › Text to type · Lasso to move or delete · two fingers pan and zoom</div>
@@ -767,7 +802,7 @@ function paint(c, {shadows = false, ai = true, pdf = true, revealed = true} = {}
 
   c.lineCap = 'round';
   c.lineJoin = 'round';
-  strokes.forEach((s, i) => { if ((replayN == null || i < replayN) && (ai || !s.ai)) drawStroke(c, s); });
+  strokes.forEach((s, i) => { if ((replayN == null || i < replayN) && (ai || !s.ai) && (c === ctx || !s.tour)) drawStroke(c, s); });
   if (c === ctx && drawing) drawStroke(c, drawing);
 
   /* typed text, in the page's own font (the box being edited is drawn by the textarea instead) */
@@ -1081,7 +1116,7 @@ function done(e) {
     strokes.push(drawing);
     record({type: 'add', stroke: drawing});
     lastPenAt = performance.now();
-    dirty();
+    dirty(); coachTick();
   }
   drawing = null;
   redraw();
@@ -1527,7 +1562,7 @@ function snapshot({withAI = false} = {}) {
 
 function bounds() {
   let b = null;
-  for (const s of strokes) for (const p of s.pts) b = union(b, {minX: p.x, minY: p.y, maxX: p.x, maxY: p.y});
+  for (const s of strokes) { if (s.tour) continue; for (const p of s.pts) b = union(b, {minX: p.x, minY: p.y, maxX: p.x, maxY: p.y}); }
   for (const t of texts) if (t.text.trim()) b = union(b, textBox(t));
   return b;
 }
@@ -1804,6 +1839,7 @@ function aiBottom() {
    (or below its own last note), paced by the clock at ~45 characters a
    second, in ink that is only ever its own */
 function write(text) {
+  setTimeout(coachTick, 0);
   const box = bounds();
   const size = handSize();
   let width = box ? box.maxX - box.minX : 0;
@@ -2270,7 +2306,7 @@ function serialize() {
   return {
     id: current.id, notebook: current.notebook, section: current.section, title: titleEl.value,
     topic: topicEl.value, pan: {...pan}, zoom,
-    strokes: strokes.map(s => ({color: s.color, width: s.width, alpha: s.alpha || 1, ai: !!s.ai, pts: s.pts.map(p => ({x: p.x, y: p.y}))})),
+    strokes: strokes.filter(s => !s.tour).map(s => ({color: s.color, width: s.width, alpha: s.alpha || 1, ai: !!s.ai, pts: s.pts.map(p => ({x: p.x, y: p.y}))})),
     texts: texts.filter(t => t.text.trim()).map(snapText),
     pics: pics.map(q => ({bytes: q.bytes, x: q.x, y: q.y, w: q.w, h: q.h})),
     aiMarks: aiMarks.map(m => ({x: m.x, y: m.y, size: m.size, text: m.text, shown: m.text.length})),
@@ -2645,7 +2681,10 @@ function setSide(open) {
   document.body.classList.toggle('side-open', open && WIDE());
   redraw();
 }
-document.getElementById('sideBtn').onclick = () => setSide(!sideEl.classList.contains('open'));
+document.getElementById('sideBtn').onclick = () => {
+  if (innerWidth <= 860) return document.body.classList.toggle('tabs-open');   /* narrow: ☰ shows the tab row */
+  setSide(!sideEl.classList.contains('open'));
+};
 document.getElementById('sideClose').onclick = () => setSide(false);
 addEventListener('resize', () => document.body.classList.toggle('side-open', sideEl.classList.contains('open') && WIDE()));
 
@@ -3026,6 +3065,86 @@ const _redraw = redraw;
 redraw = function () { _redraw(); if (document.getElementById('zoomPct')) zoomLabel(); };
 
 /* ============================================================
+   THE WALK-THROUGH — first visit only. Each step asks for ONE real
+   action on the real page; the page is never blocked. It waits for the
+   action (or Next), so a stranger's first minute ends with them having
+   been taught something.
+   ============================================================ */
+const coach = document.getElementById('coach'), coachText = document.getElementById('coachText'),
+      coachNext = document.getElementById('coachNext'), coachDots = document.getElementById('coachDots');
+let coachStep = -1, coachWait = null;
+const coachDone = () => { try { return localStorage.getItem('showwork.tour') === 'done'; } catch { return true; } };
+
+const TOUR = [
+  { text: "This page is your whiteboard. Trace over the grey sum with the pen — or write your own wrong answer.",
+    target: null,
+    setup: () => {                                   /* a wrong sum, faintly, for them to trace */
+      const o = visibleOrigin(), X = o.x + 30, Y = o.y + 50, g = '#c9c4bb';
+      const segs = [[0,0,58,0],[58,0,20,78],[98,38,156,38],[127,9,127,67],[196,0,254,0],[254,0,216,78],
+                    [294,28,352,28],[294,52,352,52],[392,0,450,0],[392,0,392,38],[392,38,442,38],[442,38,447,66],[447,66,392,76],
+                    [486,0,544,0],[544,0,506,78]];
+      for (const [x1,y1,x2,y2] of segs)
+        strokes.push({color: g, width: 3, alpha: 1, tour: true, pts: [{x:X+x1,y:Y+y1},{x:X+(x1+x2)/2,y:Y+(y1+y2)/2},{x:X+x2,y:Y+y2}]});
+      redraw();
+    },
+    until: cb => { coachWait = () => { if (strokes.some(st => !st.tour)) cb(); }; } },
+
+  { text: "Now tap Check my work. It reads your handwriting, crosses out the part that's wrong, writes the fix on the page, and says why in the chat.",
+    target: 'check',
+    until: cb => { coachWait = () => { if (aiMarks.length || aiLines.length) cb(); }; } },
+
+  { text: "That's the idea. You can also just ask — the chat can see this page, and it draws on it when it needs to show you something.",
+    target: 'chatBtn' },
+
+  { text: "Last thing, and it's the best one: tap Teach me… and name anything you want to learn. It asks what you already know, puts a plan on the page, and teaches it a step at a time.",
+    target: 'teachBtn' },
+];
+
+function placeCoach(id) {
+  for (const el of document.querySelectorAll('.coach-target')) el.classList.remove('coach-target');
+  coach.hidden = false;
+  const old = coach.querySelector('.arrow'); if (old) old.remove();
+  if (!id) {                                         /* no target: BELOW whatever the step drew, never on top of it */
+    const b = bounds(), hint = strokes.filter(st => st.tour);
+    let bottom = 200;
+    for (const st of hint) for (const q of st.pts) bottom = Math.max(bottom, q.y * zoom + pan.y);
+    coach.style.left = Math.max(16, visibleOrigin().x * zoom + pan.x) + 'px';
+    coach.style.top = Math.min(innerHeight - 190, bottom + 28) + 'px';
+    return;
+  }
+  const el = document.getElementById(id); el.classList.add('coach-target');
+  const r = el.getBoundingClientRect(), w = Math.min(340, innerWidth - 32);
+  coach.style.left = Math.max(16, Math.min(innerWidth - w - 16, r.left + r.width / 2 - w / 2)) + 'px';
+  coach.style.top = (r.bottom + 14) + 'px';
+  const a = document.createElement('div'); a.className = 'arrow';
+  a.style.left = (r.left + r.width / 2 - parseFloat(coach.style.left) - 7) + 'px'; a.style.top = '-7px';
+  coach.querySelector('.bubble').appendChild(a);
+}
+
+function showCoach(i) {
+  coachStep = i; coachWait = null;
+  if (i >= TOUR.length) return endCoach();
+  const step = TOUR[i];
+  coachText.textContent = step.text;
+  coachNext.textContent = i === TOUR.length - 1 ? 'Done' : (step.until ? 'Skip step' : 'Next');
+  coachDots.innerHTML = TOUR.map((_, n) => `<i class="${n === i ? 'on' : ''}"></i>`).join('');
+  placeCoach(step.target);
+  if (step.setup) step.setup();
+  if (step.until) step.until(() => { if (coachStep === i) showCoach(i + 1); });
+}
+function endCoach() {
+  coach.hidden = true; coachStep = -1; coachWait = null;
+  for (const el of document.querySelectorAll('.coach-target')) el.classList.remove('coach-target');
+  try { localStorage.setItem('showwork.tour', 'done'); } catch {}
+}
+coachNext.onclick = () => showCoach(coachStep + 1);
+document.getElementById('coachSkip').onclick = endCoach;
+addEventListener('resize', () => { if (coachStep >= 0) placeCoach(TOUR[coachStep].target); });
+
+/* the page tells the walk-through when something happened */
+function coachTick() { if (coachWait) coachWait(); }
+
+/* ============================================================
    START — open the store, load the pages, open where you left off.
    ============================================================ */
 (async () => {
@@ -3039,6 +3158,7 @@ redraw = function () { _redraw(); if (document.getElementById('zoomPct')) zoomLa
   else await openPage(pickStart());
   if (WIDE()) setSide(true);                         /* OneNote keeps its columns open on a wide screen */
   if (await msFinishSignIn()) showOnenote();         /* back from Microsoft? open the notebook picker */
+  if (!coachDone()) { showTab('home'); setTimeout(() => showCoach(0), 500); }   /* a stranger's first minute */
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});   /* installable; shell opens offline */
 })();
 </script>
