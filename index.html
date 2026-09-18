@@ -1485,14 +1485,16 @@ async function runCheck() {
   try {
     const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600)), calc: calcOn() ? 'on' : 'off'});
     if (v.all_correct) {
-      write("Nothing wrong here.\nThis is all correct.");
+      write("✓");
+      tutorSays("All correct — nothing to fix on this page.");
     } else {
-      /* cross out the wrong bit where it sits, then write the way through
-         underneath: what's wrong, the steps, and the line done right */
+      /* The board shows ONLY the work done right: strike the wrong bit where it
+         sits, write the corrected lines under it. The WHY goes to the chat. */
       if (Array.isArray(v.wrong_box) && v.wrong_box.length === 4) strike(v.wrong_box);
-      const steps = Array.isArray(v.steps) ? v.steps.filter(Boolean).slice(0, 3) : [];
-      write([v.problem, "Here's how we do it:", ...steps,
-             v.corrected_line ? `So: ${v.corrected_line}` : ''].filter(Boolean).join('\n'));
+      const steps = (Array.isArray(v.steps) ? v.steps : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
+      const lines = [...steps]; if (v.corrected_line && !steps.includes(String(v.corrected_line).trim())) lines.push(String(v.corrected_line).trim());
+      if (lines.length) write(lines.join('\n'));
+      tutorSays([v.problem, v.nudge].map(x => String(x || '').trim()).filter(Boolean).join(' ') + (lines.length ? ' I wrote the corrected work on the board.' : ''), true);
     }
     say(v.all_correct ? 'All correct.' : (v.checks_left != null ? `${v.checks_left} checks left` : ''));
   } catch (e) { say(e.message, true); }
@@ -1508,12 +1510,12 @@ async function runGrade() {
     const results = Array.isArray(v.results) ? v.results : [];
     for (const r of results) if (!r.correct && Array.isArray(r.wrong_box) && r.wrong_box.length === 4) strike(r.wrong_box);
     const right = results.filter(r => r.correct).length;
-    const lines = [`Score: ${v.score || (right + '/' + (results.length || current.exam.n))}`];
-    for (const r of results) {
-      lines.push(`${r.n}. ${r.correct ? '✓' : '✗'} ${(r.note || '').trim()}` +
-                 (!r.correct && r.corrected_line ? `  →  ${r.corrected_line}` : ''));
-    }
+    const score = v.score || (right + '/' + (results.length || current.exam.n));
+    /* the board: the score and, for each wrong one, the work done right. The notes go to the chat. */
+    const lines = [`Score: ${score}`];
+    for (const r of results) if (!r.correct && r.corrected_line) lines.push(`${r.n}. ${String(r.corrected_line).trim()}`);
     write(lines.join('\n'));
+    tutorSays(`Score ${score}. ` + results.map(r => `${r.n}: ${r.correct ? 'correct' : (String(r.note || '').trim() || 'incorrect')}`).join(' · ') + (lines.length > 1 ? ' The corrected work is on the board.' : ''), true);
     current.exam.graded = true; applyExamState(); dirty();
     say(`Graded ${lines[0].toLowerCase()}. The tutor is unlocked — ask about anything you missed.`);
   } catch (e) { say(e.message, true); }
@@ -1957,6 +1959,14 @@ chatBtn.onclick = () => {
   if (open) chatIn.focus();
 };
 document.getElementById('chatClose').onclick = () => chatBtn.onclick();
+
+/* the tutor explaining in the chat - the board shows the work, the chat says why */
+function tutorSays(text, open = false) {
+  if (!text) return;
+  chat.push({role: 'ai', text});
+  renderChat(); dirty();
+  if (open && !chatEl.classList.contains('open') && !chatBtn.disabled) chatBtn.onclick();
+}
 
 function renderChat() {
   msgsEl.innerHTML = '';
