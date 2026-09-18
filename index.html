@@ -109,6 +109,14 @@
   #paperPanel .sheet { border: 2px solid var(--edge); border-radius: 8px; padding: 6px; background: transparent; cursor: pointer; font: inherit; font-size: 12px; color: var(--text); display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
   #paperPanel .sheet[aria-pressed="true"] { border-color: var(--accent); background: #f7f1fb; }
   #paperPanel .sheet .pv { height: 64px; border-radius: 4px; border: 1px solid var(--edge); background-color: #fbfaf7; background-position: 0 0; }
+  #colorMenu { position: fixed; z-index: 22; display: none; flex-direction: column; gap: 8px; width: 232px; padding: 10px;
+               background: var(--ui); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.09); }
+  #colorMenu.open { display: flex; }
+  #colorMenu .swatches, #colorMenu .recent { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+  #colorMenu .recent:empty { display: none; }
+  #colorMenu b { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  #colorMenu button.sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+  #colorMenu button.sw[aria-pressed="true"] { border-color: var(--accent); transform: scale(1.14); }
   #symMenu { position: fixed; z-index: 22; display: none; flex-wrap: wrap; gap: 4px; width: 232px; padding: 8px;
              background: var(--ui); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.09); }
   #symMenu.open { display: flex; }
@@ -329,6 +337,13 @@
   #coach .arrow { position: absolute; width: 14px; height: 14px; background: var(--ui); border-left: 1px solid var(--edge); border-top: 1px solid var(--edge); transform: rotate(45deg); }
   .coach-target { position: relative; z-index: 41; box-shadow: 0 0 0 3px var(--accent), 0 0 0 9px rgba(119,25,170,.22); border-radius: 10px; }
 
+  /* the live zoom reading, at the fingers doing the zooming — slightly above
+     the midpoint so a hand doesn't cover it */
+  #zoomBadge { position: fixed; z-index: 23; transform: translate(-50%, -50%); padding: 5px 10px; border-radius: 999px;
+               background: rgba(46,44,40,.86); color: #fff; font-size: 13px; font-weight: 600; pointer-events: none;
+               opacity: 0; transition: opacity .18s ease; }
+  #zoomBadge.on { opacity: 1; }
+
   #status { position: fixed; left: 16px; bottom: 14px; z-index: 10; font-size: 13px; color: var(--muted); max-width: 50vw; }
   #status.bad { color: #a33; }
   #showRead { position: fixed; left: 16px; bottom: 40px; z-index: 10; font-size: 12.5px; padding: 5px 10px; }
@@ -404,6 +419,7 @@
   <symbol id="f-arrow_download" viewBox="0 0 24 24"><path d="M18.25 20.5a.75.75 0 1 1 0 1.5h-13a.75.75 0 1 1 0-1.5zm-6.6-18.49h.1c.38 0 .7.28.74.64l.01.1v13.7l3.72-3.73a.75.75 0 0 1 .98-.07l.08.07c.27.27.3.68.07.98l-.07.08-5 5a.75.75 0 0 1-.97.07l-.09-.07-5-5a.75.75 0 0 1 .98-1.13l.08.07L11 16.43V2.76c0-.38.28-.7.65-.75h.1z"/></symbol>
   <symbol id="f-hat_graduation" viewBox="0 0 24 24"><path d="M9.9 3.7a3.9 3.9 0 0 1 4.2 0l8.05 5.17a.75.75 0 0 1 .01 1.26L19 12.19v5.56q0 .25-.15.45l-.01.02-.11.13q-.11.14-.32.33c-.28.27-.7.62-1.25.96A9.7 9.7 0 0 1 12 21a9.7 9.7 0 0 1-5.16-1.36 7 7 0 0 1-1.69-1.44 1 1 0 0 1-.15-.45V12.2l-2-1.3v5.36a.75.75 0 1 1-1.5 0V9.5q.02-.42.36-.64zm4.22 11.68a3.9 3.9 0 0 1-4.24 0l-3.38-2.2v4.29l.13.13q.31.32 1 .76A8 8 0 0 0 12 19.5a8 8 0 0 0 4.37-1.14 6 6 0 0 0 1.13-.89v-4.3zm-.84-10.42c-.78-.5-1.78-.5-2.56 0L3.63 9.51l7.07 4.62c.79.51 1.81.51 2.6 0l7.07-4.62z"/></symbol>
   <symbol id="f-notepad" viewBox="0 0 24 24"><path d="M16.25 2c.41 0 .75.34.75.75V4h.75C18.99 4 20 5 20 6.25v10.44c0 .4-.16.78-.44 1.06l-3.81 3.81a1.5 1.5 0 0 1-1.06.44H6.25C5.01 22 4 21 4 19.75V6.25C4 5.01 5 4 6.25 4H7V2.75a.75.75 0 0 1 1.5 0V4h2.75V2.75a.75.75 0 0 1 1.5 0V4h2.75V2.75c0-.41.34-.75.75-.75m-10 3.5a.75.75 0 0 0-.75.75v13.5c0 .41.34.75.75.75H14v-2.25c0-1.24 1-2.25 2.25-2.25h2.25V6.25a.75.75 0 0 0-.75-.75zm10 12a.75.75 0 0 0-.75.75v1.44l2.19-2.19zM11.33 16a.75.75 0 0 1 0 1.5H8.25a.75.75 0 0 1 0-1.5h3.08m4.42-4a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1 0-1.5zm0-4a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1 0-1.5z"/></symbol>
+  <symbol id="f-convert" viewBox="0 0 24 24"><path d="M16.51 3c.31 0 .6.2.7.5L22.7 19a.75.75 0 0 1-1.42.5l-1.42-4h-7.11l-1.56 4.02a.75.75 0 1 1-1.4-.54l6-15.5c.11-.3.4-.48.71-.48m-.04 2.9L13.34 14h6zM5.5 10.5l.29.01c1.96.1 3.12 1.23 3.2 3.05l.01.2v5.5c0 .38-.28.7-.65.74l-.1.01a.75.75 0 0 1-.74-.65l-.01-.1v-.1a5.6 5.6 0 0 1-2.75.85 3.13 3.13 0 0 1-3.25-3.25c0-1.72 1.19-3 3.16-3.24a8 8 0 0 1 2.84.2c-.01-1.1-.56-1.65-1.79-1.71q-1.44-.06-2.03.36a.75.75 0 1 1-.86-1.22 4.5 4.5 0 0 1 2.68-.65m2 4.82-.3-.09q-1.22-.33-2.36-.19C3.61 15.2 3 15.84 3 16.8c0 1.1.71 1.75 1.75 1.75q1.02 0 2.5-.97l.25-.17z"/></symbol>
 </svg>
 
 <div id="ribbon">
@@ -484,14 +500,14 @@
   <div class="rpanel" data-panel="draw" hidden>
     <div class="group">
       <div class="pens" id="pens"></div>
+      <input type="color" id="colorInput" hidden>
       <button class="rbtn" id="hiliteBtn" aria-pressed="false" title="Highlighter"><svg><use href="#f-highlight"/></svg><span>Highlighter</span></button>
       <button class="rbtn" id="thick"  title="Thickness"><svg><use href="#f-line_horizontal_3"/></svg><span id="thickLabel">Medium</span></button>
     </div>
     <div class="group">
       <button class="rbtn" id="eraser" aria-pressed="false" title="Eraser"><svg><use href="#f-eraser"/></svg><span>Eraser</span></button>
       <button class="rbtn" id="select" aria-pressed="false" title="Lasso Select"><svg><use href="#f-lasso"/></svg><span>Lasso Select</span></button>
-      <button class="rbtn" id="inkTextBtn"  title="Ink to Text"><svg><use href="#f-draw_text"/></svg><span>Ink to Text</span></button>
-      <button class="rbtn" id="inkMathBtn"  title="Ink to Math"><svg><use href="#f-math_format_linear"/></svg><span>Ink to Math</span></button>
+      <button class="rbtn" id="convertBtn" disabled title="Circle handwriting with Lasso Select, then convert it to typed text"><svg><use href="#f-convert"/></svg><span id="convertLbl">Convert</span></button>
     </div>
     <div class="group">
       <button class="rbtn" id="shapeLine" aria-pressed="false" title="Line"><svg><use href="#f-line"/></svg><span>Line</span></button>
@@ -530,6 +546,11 @@
   <h2>Paper for this page</h2>
   <div class="grid" id="paperGrid"></div>
   <p class="fine">Saved with the page. Your last pick becomes the paper for new pages.</p>
+</div>
+<div id="colorMenu">
+  <div class="swatches" id="colorSwatches"></div>
+  <div class="recent" id="colorRecent"></div>
+  <button class="act" id="colorMore">More colours…</button>
 </div>
 <div id="symMenu">
   <span>∫</span><span>∑</span><span>√</span><span>π</span><span>∞</span><span>≤</span><span>≥</span><span>≠</span><span>±</span><span>×</span><span>÷</span><span>θ</span><span>Δ</span><span>∂</span><span>→</span><span>²</span><span>³</span><span>°</span>
@@ -674,6 +695,7 @@
   </div>
 </div>
 
+<div id="zoomBadge" hidden>100%</div>
 <div id="status"></div>
 <button class="act" id="showRead" hidden title="See or fix what was read from your handwriting">What I read ▸</button>
 <div id="hint">Draw: pen or mouse · Insert › Text to type · Lasso to move or delete · two fingers pan and zoom</div>
@@ -954,7 +976,7 @@ cv.addEventListener('pointerdown', e => {
   /* capture so the up arrives even if the pen crosses the edge; a pointer that
      is already gone (or a synthetic one) throws here, and that must not kill the stroke */
   try { cv.setPointerCapture(e.pointerId); } catch {}
-  if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on');   /* touching the paper closes menus */
+  if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
     if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;   /* a palm */
@@ -1037,6 +1059,7 @@ cv.addEventListener('pointermove', e => {
       const bx = (pinch.mid.x - pinch.pan0.x) / pinch.zoom0;   /* board point under mid0 */
       const by = (pinch.mid.y - pinch.pan0.y) / pinch.zoom0;
       pan = {x: mid.x - bx * zoom, y: mid.y - by * zoom};
+      flashZoom(mid.x, mid.y);
       return redraw();
     }
     if (panFrom) {
@@ -1220,6 +1243,7 @@ const selBar = document.getElementById('selBar');
 function setSelection(sel) {
   selection = sel;
   selBar.classList.toggle('on', !!sel);
+  if (typeof refreshConvert === 'function') refreshConvert();
   if (sel) {
     const n = sel.strokes.length + sel.marks.length + sel.lines.length + (sel.texts || []).length;
     document.getElementById('selCount').textContent = n + (n === 1 ? ' thing' : ' things') + ' selected';
@@ -1304,6 +1328,7 @@ cv.addEventListener('wheel', e => {
   if (e.ctrlKey || e.metaKey) {
     const factor = Math.exp(-e.deltaY * 0.01);
     zoomAt(e.clientX, e.clientY, Math.min(ZMAX, Math.max(ZMIN, zoom * factor)));
+    flashZoom(e.clientX, e.clientY);
   } else {
     pan = {x: pan.x - e.deltaX, y: pan.y - e.deltaY};
   }
@@ -1451,15 +1476,59 @@ PENS.forEach((c, i) => {
   const b = document.createElement('button');
   b.className = 'pen';
   b.style.background = c;
+  b.dataset.color = c;
   b.setAttribute('aria-pressed', i === 0);
   b.setAttribute('aria-label', 'Pen colour ' + (i + 1));
-  b.onclick = () => {
-    pen = c;
-    setTool('pen');
-    [...pensEl.children].forEach(x => x.setAttribute('aria-pressed', x === b));
-  };
+  b.onclick = () => pickColor(c);
   pensEl.appendChild(b);
 });
+/* the "+" that opens the full palette */
+const moreBtn = document.createElement('button');
+moreBtn.className = 'pen'; moreBtn.id = 'penMore'; moreBtn.title = 'More colours';
+moreBtn.style.cssText = 'background:conic-gradient(#e11d48,#f59e0b,#16a34a,#0ea5e9,#7c3aed,#e11d48);position:relative';
+moreBtn.onclick = () => {
+  const r = moreBtn.getBoundingClientRect();
+  colorMenu.style.left = Math.min(innerWidth - 248, r.left) + 'px'; colorMenu.style.top = (r.bottom + 8) + 'px';
+  colorMenu.classList.toggle('open'); renderColorMenu();
+};
+pensEl.appendChild(moreBtn);
+
+/* ============================================================
+   COLOUR — four quick pens plus a "+" that opens 16 presets, your
+   recent custom colours, and the system picker. One palette serves the
+   pen, the highlighter and font colour. The tutor's amber is never in
+   it: if your ink could be its colour, you'd lose track of whose work
+   is whose.
+   ============================================================ */
+const PALETTE = ['#2e2c28','#5b5750','#9a948a','#1d4ed8','#0ea5e9','#0891b2','#166534','#65a30d',
+                 '#b45309','#7c2d12','#be123c','#db2777','#7c3aed','#4f46e5','#0f766e','#000000'];
+const colorMenu = document.getElementById('colorMenu'), colorInput = document.getElementById('colorInput');
+const recentColors = () => { try { return JSON.parse(localStorage.getItem('showwork.colors') || '[]'); } catch { return []; } };
+function rememberColor(c) {
+  const list = [c, ...recentColors().filter(x => x !== c)].slice(0, 8);
+  try { localStorage.setItem('showwork.colors', JSON.stringify(list)); } catch {}
+}
+function swatch(c, into) {
+  const b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.title = c;
+  b.setAttribute('aria-pressed', c === pen);
+  b.onclick = () => pickColor(c);
+  into.appendChild(b);
+}
+function renderColorMenu() {
+  const grid = document.getElementById('colorSwatches'), rec = document.getElementById('colorRecent');
+  grid.innerHTML = ''; rec.innerHTML = '';
+  for (const c of PALETTE) if (c.toLowerCase() !== AI_INK.toLowerCase()) swatch(c, grid);
+  for (const c of recentColors()) swatch(c, rec);
+}
+function pickColor(c) {
+  if (c.toLowerCase() === AI_INK.toLowerCase()) return say("That colour is the tutor's — pick another so your work stays yours.", true);
+  pen = c; rememberColor(c); setTool(tool === 'eraser' || tool === 'select' ? 'pen' : tool);
+  for (const b of pensEl.children) b.setAttribute('aria-pressed', b.dataset.color === c);
+  colorMenu.classList.remove('open'); renderColorMenu();
+  if (editing || (selection && selection.texts && selection.texts.length)) fmt(t => t.color = c);   /* text selected: recolour it */
+}
+document.getElementById('colorMore').onclick = () => { colorInput.value = pen; colorInput.click(); };
+colorInput.oninput = () => pickColor(colorInput.value);
 
 const eraserBtn = document.getElementById('eraser');
 const selectBtn = document.getElementById('select');
@@ -2925,18 +2994,18 @@ function shapeStroke(a, b) {
 
 /* Ink to Text / Ink to Math: the circled ink goes to the model, comes back typed, and replaces the ink */
 async function inkTo(kind) {
-  if (!selection || !selection.strokes.length) return say('Circle some ink with Lasso Select first.', true);
+  if (!selection || !selection.strokes.length) return say('Circle some handwriting with Lasso Select first.', true);
   const sel = selection, box = selectionBox();
-  say(kind === 'math' ? 'Reading the math…' : 'Reading the ink…');
+  say('Reading the handwriting…');
   try {
     const PAD = 24, SCALE = 2, w = box.maxX - box.minX + PAD * 2, h = box.maxY - box.minY + PAD * 2;
     const off = document.createElement('canvas'); off.width = w * SCALE; off.height = h * SCALE;
     const o = off.getContext('2d'); o.fillStyle = '#fff'; o.fillRect(0, 0, off.width, off.height);
     o.scale(SCALE, SCALE); o.translate(PAD - box.minX, PAD - box.minY); o.lineCap = 'round'; o.lineJoin = 'round';
     for (const st of sel.strokes) drawStroke(o, st);
-    const r = await api('/transcribe', {image: off.toDataURL('image/jpeg', .9), subject: subject(), context: kind === 'math'
-      ? 'This is ONE handwritten math expression. Return it as a single line of plain-text math (use sqrt(), ^, /, *). No brackets for doubt, no commentary.'
-      : 'These are handwritten notes. Return the words as plain text, keeping line breaks. No brackets for doubt, no commentary.'});
+    const r = await api('/transcribe', {image: off.toDataURL('image/jpeg', .9), subject: subject(), context:
+      'Convert this handwriting to typed text. If it is a mathematical expression, return it as plain-text math ' +
+      '(sqrt(), ^, /, *) on one line; if it is words, return the words keeping line breaks. No brackets for doubt, no commentary.'});
     const text = (r.transcription || '').replace(/\[[^\]]*\]/g, '').trim();
     if (!text) throw new Error('nothing came back');
     const hs = sel.strokes.map(st => { let lo = Infinity, hi = -Infinity; for (const q of st.pts) { lo = Math.min(lo, q.y); hi = Math.max(hi, q.y); } return hi - lo; }).filter(x => x > 6).sort((a, b) => a - b);
@@ -2948,8 +3017,16 @@ async function inkTo(kind) {
     setSelection(null); redraw(); dirty(); say('');
   } catch (e) { say('Could not convert: ' + e.message, true); }
 }
-document.getElementById('inkTextBtn').onclick = () => inkTo('text');
-document.getElementById('inkMathBtn').onclick = () => inkTo('math');
+/* One button, not two: the model works out whether the circled ink is words
+   or math. It stays disabled until something is selected, and says how much —
+   the old pair failed silently with a red error when nothing was circled. */
+const convertBtn = document.getElementById('convertBtn');
+convertBtn.onclick = () => inkTo('auto');
+function refreshConvert() {
+  const n = selection ? selection.strokes.length : 0;
+  convertBtn.disabled = !n;
+  document.getElementById('convertLbl').textContent = n ? `Convert ${n}` : 'Convert';
+}
 
 /* ---- Home: text formatting, tags, paste, dictate, read aloud ---- */
 function fmtTargets() {
@@ -3101,9 +3178,23 @@ function defaultPaper() {
 }
 
 function setZoom(z, sx, sy) {
-  const c = viewCenter(); zoomAt(sx ?? c.x, sy ?? c.y, Math.min(ZMAX, Math.max(ZMIN, z))); redraw(); dirty(); zoomLabel();
+  const c = viewCenter(); zoomAt(sx ?? c.x, sy ?? c.y, Math.min(ZMAX, Math.max(ZMIN, z)));
+  redraw(); dirty(); zoomLabel(); flashZoom(sx ?? c.x, sy ?? c.y);
 }
 function zoomLabel() { document.getElementById('zoomPct').textContent = Math.round(zoom * 100) + '%'; }
+
+/* show the reading where the zooming is happening, then fade it */
+const zoomBadge = document.getElementById('zoomBadge');
+let zoomFade = null;
+function flashZoom(x, y) {
+  zoomBadge.hidden = false;
+  zoomBadge.textContent = Math.round(zoom * 100) + '%';
+  zoomBadge.style.left = x + 'px';
+  zoomBadge.style.top = Math.max(60, y - 46) + 'px';
+  zoomBadge.classList.add('on');
+  clearTimeout(zoomFade);
+  zoomFade = setTimeout(() => zoomBadge.classList.remove('on'), 900);
+}
 function pageBounds() { let b = bounds(); for (const m of aiMarks) b = union(b, markBox(m)); for (const pg of pages) b = union(b, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h}); return b; }
 document.getElementById('zoomIn').onclick  = () => setZoom(zoom * 1.25);
 document.getElementById('zoomOut').onclick = () => setZoom(zoom / 1.25);
