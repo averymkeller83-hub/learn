@@ -230,6 +230,12 @@
 
   /* when the sidebar is open on a wide screen, the page's chrome moves right of it */
   body.side-open #meta { left: 498px; width: min(560px, calc(100vw - 470px - 56px)); }
+  /* every centred panel centres in the space RIGHT of the open sidebar, not
+     in the viewport — otherwise half of it hides behind the notebook list */
+  body.side-open #panel, body.side-open #settings, body.side-open #sources,
+  body.side-open #onenote, body.side-open #teach, body.side-open #progress, body.side-open #paperPanel {
+    left: calc(470px + (100vw - 470px) / 2);
+  }
   @media (max-width: 1099px) { body.side-open #ribbon { left: 0; } body.side-open #meta { left: 28px; } }
 
   /* ============================================================
@@ -295,7 +301,27 @@
   #onenote.on { display: block; }
   #teach { position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: var(--ui); border: 1px solid var(--edge);
            border-radius: 12px; box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none; -webkit-user-select: text; user-select: text; }
-  #teach.on { display: block; } #teach h2 { margin: 0 0 6px; font-size: 16px; } #teach p.fine { margin: 0 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  #teach.on { display: block; }
+  #progress { position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(620px, calc(100vw - 32px));
+              max-height: calc(100vh - 170px); overflow: auto; background: var(--ui); border: 1px solid var(--edge);
+              border-radius: 12px; box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 18px; z-index: 25; display: none;
+              -webkit-user-select: text; user-select: text; }
+  #progress.on { display: block; }
+  #progress h2 { margin: 0 0 12px; font-size: 16px; } #progress h2 span { color: var(--muted); font-weight: 400; font-size: 14px; }
+  #progress h3 { margin: 16px 0 6px; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  #progress .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+  #progress .tile { border: 1px solid var(--edge); border-radius: 10px; padding: 10px 12px; background: var(--paper); }
+  #progress .tile b { display: block; font-size: 22px; line-height: 1.2; }
+  #progress .tile span { font-size: 12px; color: var(--muted); }
+  #progress .bars { display: flex; flex-direction: column; gap: 7px; }
+  #progress .bar { display: grid; grid-template-columns: 120px 1fr 44px; gap: 10px; align-items: center; font-size: 13px; }
+  #progress .bar .track { height: 9px; border-radius: 99px; background: var(--side); overflow: hidden; }
+  #progress .bar .fill { height: 100%; background: var(--accent); border-radius: 99px; }
+  #progress ul { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.65; }
+  #progress .days { display: flex; gap: 4px; align-items: flex-end; height: 56px; }
+  #progress .days i { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; opacity: .85; }
+  #progress .days i.zero { background: var(--edge); }
+  #progress .empty { font-size: 13.5px; color: var(--muted); } #teach h2 { margin: 0 0 6px; font-size: 16px; } #teach p.fine { margin: 0 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
   #teach input, #teach select { font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); color: var(--text); }
   #teach input { width: 100%; } #teach .row { display: flex; gap: 8px; } #teach .row select { flex: 1; } #teach .row button { flex: 1; }
   #onenote h2 { margin: 0 0 6px; font-size: 15px; } #onenote p { margin: 0 0 10px; font-size: 13.5px; } #onenote p.fine { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
@@ -437,6 +463,7 @@
   <symbol id="f-camera" viewBox="0 0 24 24"><path d="M13.92 2.5c.8 0 1.54.43 1.94 1.11l.82 1.4h2.07C20.55 5 22 6.45 22 8.24v9.5c0 1.8-1.46 3.25-3.25 3.25H5.25A3.25 3.25 0 0 1 2 17.75v-9.5C2 6.45 3.46 5 5.25 5h2.08l.88-1.42a2.3 2.3 0 0 1 1.91-1.08zm0 1.5h-3.8q-.34 0-.57.27l-.07.1-1.1 1.77a.8.8 0 0 1-.63.36h-2.5c-.97 0-1.75.78-1.75 1.75v9.5c0 .97.78 1.75 1.75 1.75h13.5c.97 0 1.75-.78 1.75-1.75v-9.5c0-.97-.78-1.75-1.75-1.75h-2.5a.8.8 0 0 1-.65-.37l-1.03-1.76a.8.8 0 0 0-.65-.37M12 8a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9m0 1.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/></symbol>
   <symbol id="f-accessibility" viewBox="0 0 24 24"><path d="M10.5 5c0 .64.4 1.19.97 1.4q.53.14 1.06 0A1.5 1.5 0 1 0 10.5 5m-1.47.4L9 5a3 3 0 1 1 5.97.4l2.88-1.22a2.27 2.27 0 0 1 2.96 1.18 2.24 2.24 0 0 1-1.18 2.96L16 9.86v3.71l1.88 5.45a2.25 2.25 0 1 1-4.26 1.46L12 15.78l-1.62 4.7a2.25 2.25 0 1 1-4.26-1.46L8 13.56v-3.7L4.37 8.32a2.24 2.24 0 0 1-1.18-2.96 2.27 2.27 0 0 1 2.96-1.18zm2 2.44q-.26-.07-.5-.17L5.56 5.56a.77.77 0 0 0-1 .4c-.16.38.02.81.4.98l3.78 1.6c.46.2.76.65.76 1.15v3.91q0 .22-.07.4l-1.89 5.5a.75.75 0 1 0 1.42.5l2.1-6.13a.99.99 0 0 1 1.87 0l2.11 6.12a.75.75 0 1 0 1.42-.48l-1.89-5.49a1 1 0 0 1-.07-.4V9.69c0-.5.3-.95.76-1.15l3.78-1.6c.39-.17.56-.6.4-.98a.77.77 0 0 0-1-.4l-4.97 2.1q-.24.11-.5.18a3 3 0 0 1-1.95 0"/></symbol>
   <symbol id="f-brain" viewBox="0 0 24 24"><path d="M14.5 2c1.64 0 3 1.22 3.22 2.8a3.88 3.88 0 0 1 2.08 6.63A4 4 0 0 1 22 15v.25a4 4 0 0 1-3.37 3.95A3.75 3.75 0 0 1 12 20.5a3.75 3.75 0 0 1-6.63-1.3A4 4 0 0 1 2 15.25V15a4 4 0 0 1 2.2-3.57 3.86 3.86 0 0 1 2.08-6.64A3.25 3.25 0 0 1 12 3.17C12.6 2.46 13.5 2 14.5 2m-5 1.5c-.97 0-1.75.78-1.75 1.75v.25c0 .41-.34.75-.75.75h-.12a2.37 2.37 0 1 0 0 4.75H7c1.16 0 2.12.89 2.24 2.02l.01.23v.4a2 2 0 1 1-1.5 0v-.48A.75.75 0 0 0 7 12.5H6A2.5 2.5 0 0 0 3.5 15v.25a2.5 2.5 0 0 0 2.5 2.5c.34 0 .63.23.72.54l.03.14a2.26 2.26 0 0 0 4.5-.18v-9h-.9a2 2 0 1 1 0-1.5h.9v-2.5c0-.97-.78-1.75-1.75-1.75m8.23 9a2 2 0 0 1-.98.85v.9c0 1.24-1 2.25-2.25 2.25h-1.75v1.75a2.26 2.26 0 0 0 4.5.18l.03-.14c.1-.31.38-.54.72-.54a2.5 2.5 0 0 0 2.5-2.5V15a2.5 2.5 0 0 0-2.5-2.5zM8.5 15a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1m6-11.5c-.96 0-1.75.78-1.75 1.74V15h1.75c.41 0 .75-.34.75-.75v-.9a2 2 0 1 1 2.65-2.48 2.37 2.37 0 0 0-.77-4.62H17a.75.75 0 0 1-.75-.75v-.25c0-.97-.78-1.75-1.75-1.75M16 11a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1M8.5 8a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1"/></symbol>
+  <symbol id="f-trending" viewBox="0 0 24 24"><path d="M4.5 3.75a.75.75 0 0 0-1.5 0v14C3 19.55 4.46 21 6.25 21h14a.75.75 0 0 0 0-1.5h-14c-.97 0-1.75-.78-1.75-1.75zM14.75 6a.75.75 0 0 0 0 1.5h3.19l-4.69 4.69-1.97-1.97a.75.75 0 0 0-1.06 0l-3.75 3.75a.75.75 0 1 0 1.06 1.06l3.22-3.22 1.97 1.97c.3.3.77.3 1.06 0L19 8.56v3.2a.75.75 0 0 0 1.5 0V6.75a.75.75 0 0 0-.75-.75z"/></symbol>
 </svg>
 
 <div id="ribbon">
@@ -489,6 +516,7 @@
     </div>
     <div class="group">
       <button class="rbtn" id="exportBtn"  title="Export"><svg><use href="#f-share"/></svg><span>Export</span></button>
+      <button class="rbtn" id="progressBtn" title="Progress — what you've studied, what you've mastered, what keeps catching you"><svg><use href="#f-trending"/></svg><span>Progress</span></button>
       <button class="rbtn" id="setBtn"  title="Settings"><svg><use href="#f-settings"/></svg><span>Settings</span></button>
     </div>
   </div>
@@ -589,6 +617,12 @@
     <button class="act primary" id="srcLinkBtn">+ Link</button>
   </div>
   <p class="fine" id="srcState">Indexed on this device only. Nothing is uploaded until a check or chat needs a passage.</p>
+</div>
+
+<div id="progress">
+  <h2>Progress <span id="progFor"></span></h2>
+  <div id="progBody"></div>
+  <div class="row"><button class="act" id="progClose" style="flex:1">Close</button></div>
 </div>
 
 <div id="teach">
@@ -1008,7 +1042,7 @@ cv.addEventListener('pointerdown', e => {
   /* capture so the up arrives even if the pen crosses the edge; a pointer that
      is already gone (or a synthetic one) throws here, and that must not kill the stroke */
   try { cv.setPointerCapture(e.pointerId); } catch {}
-  if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open');   /* touching the paper closes menus */
+  if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open'); progEl.classList.remove('on');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
     if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;   /* a palm */
@@ -2958,6 +2992,76 @@ document.getElementById('msSave').onclick = () => {
 };
 document.getElementById('onSignIn').onclick = () => msSignIn().catch(e => say(e.message, true));
 document.getElementById('onSignOut').onclick = () => { msToken = null; try { sessionStorage.removeItem('showwork.mstoken'); } catch {} showOnenote(); };
+
+/* ============================================================
+   PROGRESS — what this notebook says about the person using it. Built
+   only from what's already stored: the pages, their dates, the exam
+   scores written on them, and the tutor's own notes. Nothing is
+   tracked that isn't already on a page.
+   ============================================================ */
+const progEl = document.getElementById('progress');
+document.getElementById('progressBtn').onclick = () => { progEl.classList.toggle('on'); if (progEl.classList.contains('on')) renderProgress(); };
+document.getElementById('progClose').onclick = () => progEl.classList.remove('on');
+
+async function renderProgress() {
+  document.getElementById('progFor').textContent = '· ' + current.notebook;
+  const body = document.getElementById('progBody');
+  body.innerHTML = '<p class="empty">Reading your notebook…</p>';
+
+  const mine = sheets.filter(x => x.notebook === current.notebook);
+  const all = await store.all();
+  const full = mine.map(m => all.find(r => r.id === m.id) || m);
+
+  /* the score lines the grader writes are the only reliable record of how it went */
+  const scores = [];
+  for (const rec of full) {
+    for (const m of (rec.aiMarks || [])) {
+      const hit = /Score:\s*(\d+)\s*\/\s*(\d+)/i.exec(m.text || '');
+      if (hit) scores.push({when: rec.updated, got: +hit[1], of: +hit[2], title: rec.title});
+    }
+  }
+  const strokes_ = full.reduce((n, r) => n + (r.strokes || []).length, 0);
+  const days = [...new Set(full.map(r => new Date(r.updated).toDateString()))].length;
+  const topics = [...new Set(full.map(r => (r.topic || '').trim()).filter(Boolean))];
+  const notes = (learnerRec().notes || []);
+
+  /* the last 14 days of work, as pages touched per day */
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const per = Array.from({length: 14}, (_, i) => {
+    const d = new Date(today); d.setDate(d.getDate() - (13 - i));
+    return full.filter(r => new Date(r.updated).toDateString() === d.toDateString()).length;
+  });
+  const peak = Math.max(1, ...per);
+
+  const pct = scores.length ? Math.round(100 * scores.reduce((a, s) => a + s.got, 0) / scores.reduce((a, s) => a + s.of, 0)) : null;
+  const esc2 = t => String(t).replace(/[&<>]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c]));
+
+  body.innerHTML = `
+    <div class="tiles">
+      <div class="tile"><b>${full.length}</b><span>pages</span></div>
+      <div class="tile"><b>${topics.length}</b><span>topics</span></div>
+      <div class="tile"><b>${days}</b><span>days studied</span></div>
+      <div class="tile"><b>${pct == null ? '—' : pct + '%'}</b><span>graded correct</span></div>
+    </div>
+
+    <h3>Last two weeks</h3>
+    <div class="days">${per.map(n => `<i class="${n ? '' : 'zero'}" style="height:${Math.round(6 + 50 * n / peak)}%" title="${n} page${n === 1 ? '' : 's'}"></i>`).join('')}</div>
+
+    <h3>How the graded work went</h3>
+    ${scores.length ? `<div class="bars">${scores.slice(-6).map(sc => {
+        const p = Math.round(100 * sc.got / sc.of);
+        return `<div class="bar"><span>${esc2(sc.title).slice(0, 22)}</span><div class="track"><div class="fill" style="width:${p}%"></div></div><span>${sc.got}/${sc.of}</span></div>`;
+      }).join('')}</div>` : '<p class="empty">Nothing graded yet — try Insert › Practice exam or Review.</p>'}
+
+    <h3>What the tutor has noticed</h3>
+    ${notes.length ? `<ul>${notes.slice(-8).map(n => `<li>${esc2(n.text)}</li>`).join('')}</ul>`
+                   : '<p class="empty">Nothing yet. The tutor adds a line whenever it learns something about how you work.</p>'}
+
+    <h3>Topics in this notebook</h3>
+    ${topics.length ? `<ul>${topics.slice(-10).map(t => `<li>${esc2(t)}</li>`).join('')}</ul>` : '<p class="empty">Name what you\'re working on in the topic line and it shows up here.</p>'}
+
+    <p class="empty" style="margin-top:14px">${strokes_.toLocaleString()} strokes of your own handwriting so far.</p>`;
+}
 
 /* ---- the sidebar ---- */
 const sideEl = document.getElementById('side');
