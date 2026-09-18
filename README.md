@@ -17,23 +17,42 @@ where everything is.
 
 ## What it does
 
-- **Check my work** — reads your handwriting, finds the *first* mistake, strikes
-  it through, writes the corrected work on the page, explains in the chat. One
-  mistake at a time; that's how people learn.
-- **Teach me…** — say a topic and your level (kid → adult). Two quick questions,
-  a plan on the board, then one step per turn. It remembers what each learner
-  has mastered and where they struggled, per notebook.
-- **A tutor with a whiteboard** — it talks in the chat and *shows* on the page:
-  shapes, arrows, labels, exact plots of any expression, SVG diagrams for
-  anything with many parts.
-- **Sources** — attach the course's textbook chapters or links; the tutor follows
-  *their* definitions and notation and cites the page.
-- **Practice exams** — five questions on your topic on a fresh page; the tutor is
-  locked until you say you're done, then grades the lot.
-- **Everything OneNote has**: pens, highlighter, eraser, lasso (move / copy /
-  delete), text, tables, pictures, PDFs to write on, ten kinds of paper,
-  dictation, read-aloud, export to PDF/PNG (share sheet on iPad), import from
-  OneNote, calculator (`3*(4+5) =` + Enter), zoom, undo/redo. Installable.
+**Check my work** — reads your handwriting, finds the *first* mistake, crosses
+it out where it sits, writes the corrected work on the page, and explains why in
+the chat. One mistake at a time; that's how people learn.
+
+**Teach me…** — say a topic and your level (kid → adult). Two quick questions to
+find out what you know, a plan on the board, then one step per turn. It remembers
+what each learner has mastered and where they struggled, per notebook.
+
+**A tutor with a whiteboard** — it talks in the chat and *shows* on the page:
+shapes, arrows, labels, exact plots of any expression, and SVG diagrams for
+anything with many parts. Ten subject personas — math, chemistry, physics,
+biology, code, writing, history, language, study skills — each carrying that
+subject's method, notation, the mistakes it produces, and how people who do the
+work actually work.
+
+**Sources** — attach the course's textbook chapters or links; the tutor follows
+*their* definitions and notation and cites the page. Your course, not a generic one.
+
+**Practice exams and Review** — five questions on your topic on a fresh page, the
+tutor locked until you say you're done. Review goes further: it walks the notebook
+oldest-first and asks you to recall what you'd otherwise be forgetting.
+
+**Progress** — pages, topics, days studied, how the graded work went, and what the
+tutor has noticed about how you work.
+
+**Everything OneNote has** — notebooks › sections › pages, the Home · Insert ·
+Draw · View ribbon with Microsoft's own icon set, pens, highlighter, eraser, lasso
+(move / copy / cut / paste / delete), text, tables, pictures, camera, PDFs to write
+on, ten kinds of paper, symbols, dictation, read-aloud, a calculator (`3*(4+5) =`
++ Enter) that can be switched off, export to PNG/PDF via the share sheet, import
+from OneNote, zoom, undo/redo. Installable as an app.
+
+**Reading mode** — OpenDyslexic, wider spacing, a warmer page, and the tutor's
+handwriting in a plain face instead of a cursive one.
+
+**Push to talk** — hold the mic, speak, let go. Nothing listens on its own.
 
 ## How it works
 
@@ -47,9 +66,13 @@ browser ──► Cloudflare Worker (worker/worker.js) ──► Gemini
    └────────────► Gemini directly, with YOUR free key (⚙ Settings)
 ```
 
-- **Bring your own key.** Anyone with a Google account gets a free Gemini key
-  in one tap. Paste it in ⚙ and every call goes straight from your browser to
-  Google — it never touches this server, and the shared quota is untouched.
+- **Bring your own AI.** Gemini (free), Anthropic Claude, OpenAI, or Ollama on
+  your own machine. Paste a key in ⚙ and every call goes straight from your
+  browser to that provider — it never touches this server. Only vision models are
+  offered: reading handwriting is the product.
+- **The shared key is capped** at 15 checks per visitor per day (counted in D1,
+  by a hash of IP and user agent — no accounts, nobody identified), so one busy
+  day can't leave the next visitor with a broken app.
 - **The prompts are in one file** — `prompts.json` — read by the Worker, the
   local dev server *and* the browser, so they can't drift.
 - **Why the read-back step exists.** On day one, two of three readers (me, the
