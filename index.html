@@ -92,6 +92,13 @@
   .rbtn svg { width: 22px; height: 22px; fill: currentColor; color: #4a4560; }
   .rtop svg { fill: currentColor; }
   .zoomPct { align-self: center; min-width: 44px; text-align: center; font-size: 12.5px; color: var(--muted); }
+  #paperPanel { position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); z-index: 25; display: none;
+                background: var(--ui); border: 1px solid var(--edge); border-radius: 12px; box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; }
+  #paperPanel.on { display: block; } #paperPanel h2 { margin: 0 0 10px; font-size: 15px; } #paperPanel p.fine { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+  #paperPanel .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+  #paperPanel .sheet { border: 2px solid var(--edge); border-radius: 8px; padding: 6px; background: transparent; cursor: pointer; font: inherit; font-size: 12px; color: var(--text); display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+  #paperPanel .sheet[aria-pressed="true"] { border-color: var(--accent); background: #f7f1fb; }
+  #paperPanel .sheet .pv { height: 64px; border-radius: 4px; border: 1px solid var(--edge); background-color: #fbfaf7; background-position: 0 0; }
   #symMenu { position: fixed; z-index: 22; display: none; flex-wrap: wrap; gap: 4px; width: 232px; padding: 8px;
              background: var(--ui); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.09); }
   #symMenu.open { display: flex; }
@@ -367,6 +374,7 @@
   <symbol id="f-calculator" viewBox="0 0 24 24"><path d="M7 7c0-1.1.9-2 2-2h6a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2zm2-.5a.5.5 0 0 0-.5.5v1c0 .28.22.5.5.5h6a.5.5 0 0 0 .5-.5V7a.5.5 0 0 0-.5-.5zm-.75 8a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5m1.25 2.75a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0m6.25-2.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5M17 17.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0m-5-2.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5m1.25 2.75a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0M7.25 2A3.25 3.25 0 0 0 4 5.25v13.5C4 20.55 5.46 22 7.25 22h9.5c1.8 0 3.25-1.46 3.25-3.25V5.25C20 3.45 18.54 2 16.75 2zM5.5 5.25c0-.97.78-1.75 1.75-1.75h9.5c.97 0 1.75.78 1.75 1.75v13.5c0 .97-.78 1.75-1.75 1.75h-9.5c-.97 0-1.75-.78-1.75-1.75z"/></symbol>
   <symbol id="f-arrow_download" viewBox="0 0 24 24"><path d="M18.25 20.5a.75.75 0 1 1 0 1.5h-13a.75.75 0 1 1 0-1.5zm-6.6-18.49h.1c.38 0 .7.28.74.64l.01.1v13.7l3.72-3.73a.75.75 0 0 1 .98-.07l.08.07c.27.27.3.68.07.98l-.07.08-5 5a.75.75 0 0 1-.97.07l-.09-.07-5-5a.75.75 0 0 1 .98-1.13l.08.07L11 16.43V2.76c0-.38.28-.7.65-.75h.1z"/></symbol>
   <symbol id="f-hat_graduation" viewBox="0 0 24 24"><path d="M9.9 3.7a3.9 3.9 0 0 1 4.2 0l8.05 5.17a.75.75 0 0 1 .01 1.26L19 12.19v5.56q0 .25-.15.45l-.01.02-.11.13q-.11.14-.32.33c-.28.27-.7.62-1.25.96A9.7 9.7 0 0 1 12 21a9.7 9.7 0 0 1-5.16-1.36 7 7 0 0 1-1.69-1.44 1 1 0 0 1-.15-.45V12.2l-2-1.3v5.36a.75.75 0 1 1-1.5 0V9.5q.02-.42.36-.64zm4.22 11.68a3.9 3.9 0 0 1-4.24 0l-3.38-2.2v4.29l.13.13q.31.32 1 .76A8 8 0 0 0 12 19.5a8 8 0 0 0 4.37-1.14 6 6 0 0 0 1.13-.89v-4.3zm-.84-10.42c-.78-.5-1.78-.5-2.56 0L3.63 9.51l7.07 4.62c.79.51 1.81.51 2.6 0l7.07-4.62z"/></symbol>
+  <symbol id="f-notepad" viewBox="0 0 24 24"><path d="M16.25 2c.41 0 .75.34.75.75V4h.75C18.99 4 20 5 20 6.25v10.44c0 .4-.16.78-.44 1.06l-3.81 3.81a1.5 1.5 0 0 1-1.06.44H6.25C5.01 22 4 21 4 19.75V6.25C4 5.01 5 4 6.25 4H7V2.75a.75.75 0 0 1 1.5 0V4h2.75V2.75a.75.75 0 0 1 1.5 0V4h2.75V2.75c0-.41.34-.75.75-.75m-10 3.5a.75.75 0 0 0-.75.75v13.5c0 .41.34.75.75.75H14v-2.25c0-1.24 1-2.25 2.25-2.25h2.25V6.25a.75.75 0 0 0-.75-.75zm10 12a.75.75 0 0 0-.75.75v1.44l2.19-2.19zM11.33 16a.75.75 0 0 1 0 1.5H8.25a.75.75 0 0 1 0-1.5h3.08m4.42-4a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1 0-1.5zm0-4a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1 0-1.5z"/></symbol>
 </svg>
 
 <div id="ribbon">
@@ -474,10 +482,8 @@
 
   <div class="rpanel" data-panel="view" hidden>
     <div class="group">
+      <button class="rbtn" id="paperBtn" title="Paper — ruled, grid, dots, Cornell, legal…"><svg><use href="#f-notepad"/></svg><span>Paper</span></button>
       <div class="pens" id="paperSwatches" title="Page colour"></div>
-      <button class="rbtn" id="rulesNone" aria-pressed="false" title="No lines"><svg><use href="#f-square"/></svg><span>No lines</span></button>
-      <button class="rbtn" id="rulesLines" aria-pressed="true" title="Rule lines"><svg><use href="#f-line_horizontal_3"/></svg><span>Rule lines</span></button>
-      <button class="rbtn" id="rulesGrid" aria-pressed="false" title="Grid"><svg><use href="#f-grid"/></svg><span>Grid</span></button>
     </div>
     <div class="group">
       <button class="rbtn" id="zoomOut"  title="Zoom out"><svg><use href="#f-zoom_out"/></svg><span>Zoom out</span></button>
@@ -492,6 +498,11 @@
       <button class="rbtn" id="replayBtn"  title="Replay ink"><svg><use href="#f-play"/></svg><span>Replay ink</span></button>
     </div>
   </div>
+</div>
+<div id="paperPanel">
+  <h2>Paper for this page</h2>
+  <div class="grid" id="paperGrid"></div>
+  <p class="fine">Saved with the page. Your last pick becomes the paper for new pages.</p>
 </div>
 <div id="symMenu">
   <span>∫</span><span>∑</span><span>√</span><span>π</span><span>∞</span><span>≤</span><span>≥</span><span>≠</span><span>±</span><span>×</span><span>÷</span><span>θ</span><span>Δ</span><span>∂</span><span>→</span><span>²</span><span>³</span><span>°</span>
@@ -678,8 +689,8 @@ let pinch = null;           /* {dist, mid, zoom0, pan0} while two fingers are do
 
 const cv  = document.getElementById('board');
 const ctx = cv.getContext('2d');
-let PAPER = getCSS('--paper'), RULE = getCSS('--line');     /* read once, not per frame; View can change the paper */
-let rules = 'lines';                                          /* 'none' | 'lines' | 'grid' */
+const RULE = getCSS('--line');                               /* read once, not per frame */
+let paper = {color: getCSS('--paper'), rule: 'college'};     /* THIS page's paper; saved with it */
 
 /* ============================================================
    fit — size the canvas to the window at real device resolution.
@@ -708,18 +719,8 @@ function redraw() {
   ctx.setTransform(r, 0, 0, r, 0, 0);
   ctx.clearRect(0, 0, innerWidth, innerHeight);
 
-  /* ---- the ruled paper, so it reads as a place to write ---- */
-  ctx.fillStyle = PAPER;
-  ctx.fillRect(0, 0, innerWidth, innerHeight);
-  ctx.strokeStyle = RULE;
-  ctx.lineWidth = 1;
-  const GAP = 38;
-  if (rules !== 'none') for (let y = (pan.y % GAP + GAP) % GAP; y < innerHeight; y += GAP) {
-    ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(innerWidth, y + .5); ctx.stroke();
-  }
-  if (rules === 'grid') for (let x = (pan.x % GAP + GAP) % GAP; x < innerWidth; x += GAP) {
-    ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, innerHeight); ctx.stroke();
-  }
+  /* ---- the paper: colour and pattern, chosen per page ---- */
+  drawPaper(ctx);
 
   /* ---- everything below moves with the pan and scales with the zoom ---- */
   ctx.save();
@@ -809,6 +810,56 @@ function paint(c, {shadows = false, ai = true, pdf = true, revealed = true} = {}
   }
 }
 
+/* ============================================================
+   PAPER — blank, ruled (three spacings), grid, dots, Cornell, legal,
+   music staff. Screen-space patterns that scroll with the pan and
+   scale with the zoom, so the lines stay under the handwriting.
+   ============================================================ */
+const PAPER_TYPES = {
+  blank:   {name: 'Blank'},
+  narrow:  {name: 'Narrow ruled', gap: 25},
+  college: {name: 'College ruled', gap: 32},
+  wide:    {name: 'Wide ruled', gap: 45},
+  gridS:   {name: 'Small grid', grid: 20},
+  gridL:   {name: 'Large grid', grid: 40},
+  dots:    {name: 'Dot grid', dots: 24},
+  cornell: {name: 'Cornell notes', gap: 32, margin: 230, summary: 190},
+  legal:   {name: 'Legal pad', gap: 32, margin: 96, color: '#fff9c4', marginColor: '#e57373'},
+  music:   {name: 'Music staff', staff: true},
+};
+function drawPaper(c) {
+  const t = PAPER_TYPES[paper.rule] || PAPER_TYPES.college;
+  c.fillStyle = t.color || paper.color;
+  c.fillRect(0, 0, innerWidth, innerHeight);
+  c.strokeStyle = RULE; c.lineWidth = 1;
+  const off = (v, g) => (v % g + g) % g;
+  if (t.gap) {
+    const g = t.gap * zoom;
+    for (let y = off(pan.y, g); y < innerHeight; y += g) { c.beginPath(); c.moveTo(0, y + .5); c.lineTo(innerWidth, y + .5); c.stroke(); }
+  }
+  if (t.grid) {
+    const g = t.grid * zoom;
+    for (let y = off(pan.y, g); y < innerHeight; y += g) { c.beginPath(); c.moveTo(0, y + .5); c.lineTo(innerWidth, y + .5); c.stroke(); }
+    for (let x = off(pan.x, g); x < innerWidth; x += g) { c.beginPath(); c.moveTo(x + .5, 0); c.lineTo(x + .5, innerHeight); c.stroke(); }
+  }
+  if (t.dots) {
+    const g = t.dots * zoom; c.fillStyle = '#cfc9bd';
+    for (let y = off(pan.y, g); y < innerHeight; y += g) for (let x = off(pan.x, g); x < innerWidth; x += g) c.fillRect(x - .75, y - .75, 1.5, 1.5);
+  }
+  if (t.margin) {                                 /* a vertical margin line that scrolls sideways with the page */
+    const x = pan.x + t.margin * zoom;
+    c.strokeStyle = t.marginColor || '#d9a0a0'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(x + .5, 0); c.lineTo(x + .5, innerHeight); c.stroke();
+    if (t.summary) { const y = innerHeight - t.summary; c.beginPath(); c.moveTo(0, y + .5); c.lineTo(innerWidth, y + .5); c.stroke(); }
+  }
+  if (t.staff) {                                  /* groups of five lines */
+    const line = 10 * zoom, group = 100 * zoom;
+    c.strokeStyle = '#8a8478';
+    for (let y = off(pan.y, group); y < innerHeight + group; y += group)
+      for (let i = 0; i < 5; i++) { const yy = y + i * line; c.beginPath(); c.moveTo(0, yy + .5); c.lineTo(innerWidth, yy + .5); c.stroke(); }
+  }
+}
+
 function drawStroke(c, s) {
   c.strokeStyle = s.color;
   c.lineWidth = s.width;
@@ -861,7 +912,7 @@ cv.addEventListener('pointerdown', e => {
   /* capture so the up arrives even if the pen crosses the edge; a pointer that
      is already gone (or a synthetic one) throws here, and that must not kill the stroke */
   try { cv.setPointerCapture(e.pointerId); } catch {}
-  if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open');   /* touching the paper closes menus */
+  if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
     if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;   /* a palm */
@@ -2226,6 +2277,7 @@ function serialize() {
     aiLines: aiLines.map(l => ({x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, shown: 1})),
     chat: chat.map(m => ({role: m.role, text: m.text, board: !!m.board})),
     exam: current.exam || null,
+    paper: {...paper},
     created: current.created || Date.now(),
     pdf: pdfBytes,
     updated: Date.now(),
@@ -2258,6 +2310,8 @@ async function openPage(rec, {quiet = false} = {}) {
   current = sheets.find(s => s.id === rec.id) || rec;
   current.exam = rec.exam || null;
   current.created = rec.created || rec.updated;
+  paper = rec.paper && PAPER_TYPES[rec.paper.rule] ? {color: rec.paper.color || '#fbfaf7', rule: rec.paper.rule} : defaultPaper();
+  if (typeof markPaper === 'function') markPaper();
   if (editing) commitText();
   strokes.length = 0; strokes.push(...(rec.strokes || []));
   texts.length = 0;   texts.push(...(rec.texts || []));
@@ -2910,15 +2964,40 @@ symMenu.addEventListener('pointerdown', e => {
   else { setTool('text'); editText({...newTextAt(viewCenter(), ch.textContent, {size: 22}), fresh: false}); }
 });
 
-/* ---- View: page colour, rule lines, zoom, panes, replay ---- */
-const PAPERS = ['#fbfaf7', '#ffffff', '#f3f4f6', '#fff8e1', '#eef6ee', '#eef2fb'];
+/* ---- View: paper (per page), zoom, panes, replay ---- */
+const PAPER_COLORS = ['#fbfaf7', '#ffffff', '#f3f4f6', '#fff8e1', '#eef6ee', '#eef2fb'];
 const swatches = document.getElementById('paperSwatches');
-PAPERS.forEach(c => { const b = document.createElement('button'); b.className = 'pen'; b.style.background = c; b.style.boxShadow = 'inset 0 0 0 1px #d9d4c9'; b.title = 'Page colour';
-  b.setAttribute('aria-pressed', c === PAPER); b.onclick = () => { PAPER = c; [...swatches.children].forEach(x => x.setAttribute('aria-pressed', x === b)); redraw(); try { localStorage.setItem('showwork.paper', c); } catch {} }; swatches.appendChild(b); });
-for (const [id, k] of [['rulesNone', 'none'], ['rulesLines', 'lines'], ['rulesGrid', 'grid']])
-  document.getElementById(id).onclick = () => { rules = k; for (const [i2, k2] of [['rulesNone', 'none'], ['rulesLines', 'lines'], ['rulesGrid', 'grid']]) document.getElementById(i2).setAttribute('aria-pressed', k2 === k); redraw(); try { localStorage.setItem('showwork.rules', k); } catch {} };
-try { const pc = localStorage.getItem('showwork.paper'); if (pc && PAPERS.includes(pc)) { PAPER = pc; [...swatches.children].forEach(x => x.setAttribute('aria-pressed', x.style.background === pc || false)); }
-      const rl = localStorage.getItem('showwork.rules'); if (rl) document.getElementById({none: 'rulesNone', lines: 'rulesLines', grid: 'rulesGrid'}[rl] || 'rulesLines').onclick(); } catch {}
+PAPER_COLORS.forEach(c => { const b = document.createElement('button'); b.className = 'pen'; b.style.background = c; b.style.boxShadow = 'inset 0 0 0 1px #d9d4c9'; b.title = 'Page colour';
+  b.onclick = () => setPaper({color: c}); swatches.appendChild(b); });
+const paperPanel = document.getElementById('paperPanel'), paperGrid = document.getElementById('paperGrid');
+for (const [key, t] of Object.entries(PAPER_TYPES)) {
+  const b = document.createElement('button'); b.className = 'sheet'; b.dataset.paper = key;
+  const pv = document.createElement('div'); pv.className = 'pv';
+  const line = 'linear-gradient(#e7e3da 1px, transparent 1px)';
+  pv.style.backgroundColor = t.color || '#fbfaf7';
+  if (t.gap)  { pv.style.backgroundImage = line; pv.style.backgroundSize = `100% ${Math.round(t.gap / 2.4)}px`; }
+  if (t.grid) { pv.style.backgroundImage = `${line}, linear-gradient(90deg, #e7e3da 1px, transparent 1px)`; pv.style.backgroundSize = `${t.grid / 2}px ${t.grid / 2}px`; }
+  if (t.dots) { pv.style.backgroundImage = 'radial-gradient(#cfc9bd 1px, transparent 1.2px)'; pv.style.backgroundSize = '10px 10px'; }
+  if (t.margin) { pv.style.boxShadow = `inset ${Math.round(t.margin / 6)}px 0 0 -${Math.round(t.margin / 6) - 1.5}px ${t.marginColor || '#d9a0a0'}`; }
+  if (t.staff) { pv.style.backgroundImage = 'repeating-linear-gradient(#8a8478 0 1px, transparent 1px 5px, #8a8478 5px 6px, transparent 6px 10px, #8a8478 10px 11px, transparent 11px 15px, #8a8478 15px 16px, transparent 16px 20px, #8a8478 20px 21px, transparent 21px 40px)'; }
+  const name = document.createElement('span'); name.textContent = t.name;
+  b.append(pv, name); b.onclick = () => setPaper({rule: key}); paperGrid.appendChild(b);
+}
+document.getElementById('paperBtn').onclick = () => { paperPanel.classList.toggle('on'); markPaper(); };
+function markPaper() {
+  for (const b of paperGrid.children) b.setAttribute('aria-pressed', b.dataset.paper === paper.rule);
+  for (const b of swatches.children) b.setAttribute('aria-pressed', b.style.backgroundColor === hexToRgb(paper.color));
+}
+const hexToRgb = h => { const n = parseInt(h.slice(1), 16); return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`; };
+function setPaper(change) {
+  paper = {...paper, ...change};
+  markPaper(); redraw(); dirty();
+  try { localStorage.setItem('showwork.paperDefault', JSON.stringify(paper)); } catch {}   /* the default for NEW pages */
+}
+function defaultPaper() {
+  try { const d = JSON.parse(localStorage.getItem('showwork.paperDefault') || 'null'); if (d && PAPER_TYPES[d.rule]) return {color: d.color || '#fbfaf7', rule: d.rule}; } catch {}
+  return {color: '#fbfaf7', rule: 'college'};
+}
 
 function setZoom(z, sx, sy) {
   const c = viewCenter(); zoomAt(sx ?? c.x, sy ?? c.y, Math.min(ZMAX, Math.max(ZMIN, z))); redraw(); dirty(); zoomLabel();
