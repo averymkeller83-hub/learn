@@ -1732,7 +1732,15 @@ const fmtNum = v => (Math.abs(v) >= 100 || Number.isInteger(v)) ? String(Math.ro
 /* an SVG diagram from the model, rendered to a picture in the sketch area (its own colours kept) */
 async function placeSvg(markup, x0, y0, W, H) {
   try {
-    const clean = markup.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+="[^"]*"/gi, '').replace(/href="javascript:[^"]*"/gi, '');
+    /* models write SVG the way a browser page would accept it, not the way an <img> does:
+       the xmlns is missing, "&" is unescaped, width/height are absent. Repair those. */
+    let clean = markup.slice(markup.indexOf('<svg')).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+="[^"]*"/gi, '').replace(/href="javascript:[^"]*"/gi, '');
+    clean = clean.slice(0, clean.lastIndexOf('</svg>') + 6);
+    clean = clean.replace(/&(?!(amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/gi, '&amp;');
+    if (!/xmlns=/.test(clean)) clean = clean.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    const vb = clean.match(/viewBox="\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)/i);
+    if (vb && !/<svg[^>]*\swidth=/.test(clean)) clean = clean.replace('<svg', `<svg width="${vb[1]}" height="${vb[2]}"`);
+    if (!vb && !/<svg[^>]*\swidth=/.test(clean)) clean = clean.replace('<svg', '<svg width="400" height="300"');
     const blob = new Blob([clean], {type: 'image/svg+xml'}), url = URL.createObjectURL(blob);
     const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('bad SVG')); im.src = url; });
     const iw = img.naturalWidth || 400, ih = img.naturalHeight || 300, k = Math.min(W / iw, H / ih, 2);
