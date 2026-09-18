@@ -1715,7 +1715,7 @@ async function runCheck() {
       if (lines.length) write(lines.join('\n'));
       tutorSays([v.problem, v.nudge].map(x => String(x || '').trim()).filter(Boolean).join(' ') + (lines.length ? ' I wrote the corrected work on the board.' : ''), true);
     }
-    say(v.all_correct ? 'All correct.' : (v.checks_left != null ? `${v.checks_left} checks left` : ''));
+    say(v.all_correct ? 'All correct.' : checksNote(v));
   } catch (e) { say(e.message, true); }
   busy(false);
 }
@@ -1748,6 +1748,15 @@ function applyExamState() {
   chatBtn.title = locked ? 'Locked until you finish the exam' : 'Talk to the tutor';
   if (locked) { chatEl.classList.remove('open'); chatBtn.setAttribute('aria-pressed', false); }
   checkEl.textContent = locked ? "I'm done — grade it" : 'Check my work';
+}
+
+/* what the shared key has left today — quiet when it's plentiful, and
+   never shown at all to someone using their own key */
+function checksNote(r) {
+  const n = r && r.checks_left;
+  if (n == null || userKey()) return '';
+  if (n === 0) return 'No free checks left today — add your own free key in ⚙ Settings.';
+  return n <= 5 ? `${n} free check${n === 1 ? '' : 's'} left today` : '';
 }
 
 async function post(path, body) {
@@ -2264,6 +2273,7 @@ document.getElementById('chatform').addEventListener('submit', async e => {
     }
     const shown = renderBoard(r.board);
     chat.push({role: 'ai', text: (r.say || '').trim() || '…', board: shown});
+    const note = checksNote(r); if (note) say(note);
   } catch (err) {
     chat.push({role: 'ai', text: 'I couldn\'t answer that: ' + err.message});
   }

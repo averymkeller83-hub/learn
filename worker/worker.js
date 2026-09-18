@@ -54,6 +54,16 @@ export default {
       return json(503, { error: "no_key", message: "GEMINI_API_KEY is not set on the server." });
     }
 
+    // ---- the shared key's daily allowance. Students who bring their own key
+    // ---- never get here, so they are never capped. ----
+    const quota = await spend(env, request);
+    if (quota && quota.over) {
+      return json(429, { error: "out_of_checks", checks_left: 0, message:
+        `That's ${DAILY_FREE} free checks today on Showwork's shared key. Add your own free Gemini key in Settings (⚙) ` +
+        `for unlimited use - it takes one tap at aistudio.google.com/apikey - or come back tomorrow. The board still works.` });
+    }
+    const left = quota ? quota.left : null;
+
     // ---- read {"image": "data:image/png;base64,...", "work"?: "..."} ----
     let data;
     try { data = await request.json(); } catch { return json(400, { error: "bad_request", message: "not JSON" }); }
@@ -90,7 +100,7 @@ export default {
         let say = raw.trim(), board = "", remember = "";
         const out = looseJson(raw);
         if (out) { say = String(out.say || ""); board = out.board ?? ""; remember = String(out.remember || "").slice(0, 200); }
-        return json(200, { say, board, remember, checks_left: null });
+        return json(200, { say, board, remember, checks_left: left });
       }
 
       // ============================================
@@ -98,7 +108,7 @@ export default {
       // ============================================
       if (url.pathname === "/transcribe") {
         const text = await askVision(env, note + prompts.transcribe, b64, mime);
-        return json(200, { transcription: text.trim(), checks_left: null });
+        return json(200, { transcription: text.trim(), checks_left: left });
       }
 
       // ============================================
@@ -118,7 +128,7 @@ export default {
       // asked for JSON; if it obliged pass it through, if it rambled hand the ramble over
       let verdict = looseJson(raw);
       if (!verdict) verdict = { line: "", problem: raw.trim(), nudge: "", all_correct: false };
-      verdict.checks_left = null;
+      verdict.checks_left = left;
       return json(200, verdict);
 
     } catch (e) {
@@ -157,6 +167,39 @@ function chatBody(system, messages, b64, mime) {
   if (b64) parts.push({ inline_data: { mime_type: mime, data: b64 } });
   contents.push({ role: "user", parts });
   return { system_instruction: { parts: [{ text: system }] }, contents, generationConfig: JSON_MODE };
+}
+
+// ============================================================
+// THE DAILY ALLOWANCE — how many calls one visitor may make on the
+// SHARED key. A visitor is a hash of IP + user agent + a salt: enough
+// to tell people apart, never enough to identify anyone, and it needs
+// no accounts. If D1 isn't bound (local dev), there is no cap.
+// ============================================================
+const DAILY_FREE = 15;
+
+async function spend(env, request) {
+  if (!env.DB) return null;                       // no database bound: don't cap
+  try {
+    const who = await visitorHash(request);
+    const day = new Date().toISOString().slice(0, 10);
+    // count first, then decide: one statement, so two quick taps can't both slip through
+    await env.DB.prepare(
+      "INSERT INTO checks (day, who, n) VALUES (?1, ?2, 1) " +
+      "ON CONFLICT(day, who) DO UPDATE SET n = n + 1").bind(day, who).run();
+    const row = await env.DB.prepare("SELECT n FROM checks WHERE day = ?1 AND who = ?2").bind(day, who).first();
+    const used = row ? row.n : 1;
+    return { over: used > DAILY_FREE, left: Math.max(0, DAILY_FREE - used) };
+  } catch (e) {
+    console.warn("quota unavailable", e);         // never let the counter break the tutor
+    return null;
+  }
+}
+
+async function visitorHash(request) {
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  const ua = request.headers.get("User-Agent") || "";
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ip + "|" + ua + "|showwork"));
+  return [...new Uint8Array(buf)].slice(0, 16).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 // a linked web page as readable text: the browser can't read other sites

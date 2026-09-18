@@ -17,3 +17,10 @@ globs = ["**/*.png"]
 fallthrough = false
 
 # The key is NOT here. It is a secret:  wrangler secret put GEMINI_API_KEY
+
+# The shared key's daily allowance, counted per visitor. Students who bring
+# their own Gemini key never reach the Worker at all, so they are never capped.
+[[d1_databases]]
+binding = "DB"
+database_name = "showwork"
+database_id = "6a612c6c-83b7-4b23-9148-c0724a14d38d"
