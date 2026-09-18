@@ -181,7 +181,8 @@ const AI_INK = '#c2410c';                                      /* reserved */
 
 const strokes = [];      /* [{color, width, pts:[{x,y}]}]  — the student's */
 const pages   = [];      /* [{img, x, y, w, h}] — a PDF's pages, stacked, UNDER the ink */
-const aiMarks = [];      /* [{x, y, text, shown}]          — the AI's */
+const aiMarks = [];      /* [{x, y, size, text, shown}]    — the AI's writing */
+const aiLines = [];      /* [{x1,y1,x2,y2, shown}]         — the AI's strike-throughs */
 
 let pen = PENS[0];
 let tool = 'pen';        /* 'pen' or 'eraser' */
@@ -261,6 +262,15 @@ function redraw() {
 
   /* ---- the AI's ink: its own colour, its own layer, and only ---- */
   /* ---- as many characters as the animation has revealed      ---- */
+  /* its strike-throughs: a line through the wrong bit, drawn left to right */
+  ctx.strokeStyle = AI_INK; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  for (const l of aiLines) {
+    ctx.beginPath();
+    ctx.moveTo(l.x1, l.y1);
+    ctx.lineTo(l.x1 + (l.x2 - l.x1) * l.shown, l.y1 + (l.y2 - l.y1) * l.shown);
+    ctx.stroke();
+  }
+
   ctx.fillStyle = AI_INK;
   ctx.textBaseline = 'top';
   for (const m of aiMarks) {
@@ -543,7 +553,7 @@ document.getElementById('undo').onclick = () => {
   redraw();
 };
 document.getElementById('clear').onclick = () => {
-  strokes.length = 0; aiMarks.length = 0; history.length = 0; redraw(); say('');
+  strokes.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0; redraw(); say('');
   showRead.hidden = true;
 };
 
@@ -588,7 +598,7 @@ function snapshot() {
   }
   /* JPEG, not PNG: a fifth of the bytes to upload, and black ink on white
      paper survives compression fine. That upload was most of the wait. */
-  return {url: off.toDataURL('image/jpeg', 0.85), box};
+  return {url: off.toDataURL('image/jpeg', 0.85), box, PAD, SCALE, w: off.width, h: off.height};
 }
 
 function bounds() {
@@ -658,9 +668,16 @@ async function runCheck() {
   busy(true, 'Looking for the first thing to fix…');
   try {
     const v = await post('/check', {image: shot.url, work: readEl.value, context: topic()});
-    write(v.all_correct
-      ? "Nothing wrong here.\nThis is all correct."
-      : `${v.problem}\n${v.nudge}`);
+    if (v.all_correct) {
+      write("Nothing wrong here.\nThis is all correct.");
+    } else {
+      /* cross out the wrong bit where it sits, then write the way through
+         underneath: what's wrong, the steps, and the line done right */
+      if (Array.isArray(v.wrong_box) && v.wrong_box.length === 4) strike(v.wrong_box);
+      const steps = Array.isArray(v.steps) ? v.steps.filter(Boolean).slice(0, 3) : [];
+      write([v.problem, "Here's how we do it:", ...steps,
+             v.corrected_line ? `So: ${v.corrected_line}` : ''].filter(Boolean).join('\n'));
+    }
     say(v.all_correct ? 'All correct.' : (v.checks_left != null ? `${v.checks_left} checks left` : ''));
   } catch (e) { say(e.message, true); }
   busy(false);
@@ -683,6 +700,30 @@ async function post(path, body) {
    in ink that is only ever its own.
    ============================================================ */
 const aiFont = size => `${size}px "Bradley Hand", "Segoe Script", "Comic Sans MS", cursive`;
+
+/* ============================================================
+   strike — cross out the wrong characters where they sit on the board.
+   The model saw the SNAPSHOT, so its box is in snapshot pixels (as
+   thousandths). Undo the snapshot's scale and padding to land back on
+   the board — the same numbers snapshot() used going the other way.
+   ============================================================ */
+function strike([ymin, xmin, ymax, xmax]) {
+  if (!shot) return;
+  const toBoard = (nx, ny) => ({
+    x: (nx / 1000 * shot.w) / shot.SCALE - shot.PAD + shot.box.minX,
+    y: (ny / 1000 * shot.h) / shot.SCALE - shot.PAD + shot.box.minY,
+  });
+  const midY = (ymin + ymax) / 2;
+  const a = toBoard(xmin, midY), b = toBoard(xmax, midY);
+  const line = {x1: a.x - 6, y1: a.y + 3, x2: b.x + 6, y2: b.y - 3, shown: 0};   /* a slight tilt reads as a hand */
+  aiLines.push(line);
+  const step = () => {
+    line.shown = Math.min(1, line.shown + 0.07);
+    redraw();
+    if (line.shown < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 
 /* ============================================================
    handSize — how big the student writes, so the AI writes the same
