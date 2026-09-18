@@ -49,50 +49,15 @@ CHECK_BUDGET = 40
 
 
 # ============================================================
-# THE TWO PROMPTS — the heart of the product.
-#
-# They are separate because they ask different questions. The first
-# one is FORBIDDEN from judging: the moment it starts correcting, it
-# stops reporting what is actually on the page.
+# THE TWO PROMPTS — the heart of the product — live in prompts.json,
+# because the Cloudflare Worker reads the SAME file. Two copies would
+# drift; one file can't. Transcribe is forbidden from judging: the
+# moment it starts correcting, it stops reporting what is on the page.
 # ============================================================
-
-TRANSCRIBE_PROMPT = """This image is a student's handwritten math work.
-
-Write out EXACTLY what is written, line by line, in reading order. Preserve
-their notation precisely - if they wrote a partial derivative symbol, write
-a partial derivative symbol; if they wrote dy/dx, write dy/dx.
-
-Do NOT correct anything. Do NOT comment on whether it is right. Do NOT solve
-the problem. You are a camera, not a teacher.
-
-If a character is genuinely ambiguous, write your best reading and put your
-alternative in [brackets] immediately after it.
-
-Return ONLY the transcription."""
-
-
-CHECK_PROMPT = """A student handwrote the math work below. The transcription has
-been CONFIRMED BY THE STUDENT as accurate, so trust it over your own reading of
-the image.
-
---- THE STUDENT'S WORK ---
-{work}
---- END ---
-
-Find the FIRST place they go wrong, reading top to bottom. Mathematical errors
-and notation errors both count.
-
-Rules:
-- Report ONE thing. The first one. Not a list.
-- If everything is correct, say so plainly and say nothing else.
-- Do not solve the rest of the problem for them.
-- Give a nudge toward the fix, not the fixed answer.
-
-Answer as JSON, nothing else:
-{{"line": "<the line, quoted from their work>",
-  "problem": "<one sentence: what is wrong>",
-  "nudge": "<one sentence: what to think about>",
-  "all_correct": <true or false>}}"""
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts.json")) as f:
+    PROMPTS = json.load(f)
+TRANSCRIBE_PROMPT = PROMPTS["transcribe"]
+CHECK_PROMPT = PROMPTS["check"]          # contains {work}, filled in below
 
 
 # ============================================================
@@ -219,7 +184,7 @@ class Board(SimpleHTTPRequestHandler):
                     "error": "no_work",
                     "message": "Confirm the transcription first."})
 
-            raw = ask_vision(CHECK_PROMPT.format(work=work), png)
+            raw = ask_vision(CHECK_PROMPT.replace("{work}", work), png)
 
             # ---- the model was asked for JSON. If it obliged, pass it ----
             # ---- through. If it rambled, hand the ramble over rather  ----

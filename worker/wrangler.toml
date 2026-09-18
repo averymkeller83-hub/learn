@@ -1,0 +1,14 @@
+name = "showwork"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# showwork.avery-keller.net — Cloudflare creates the DNS record for a custom domain.
+routes = [{ pattern = "showwork.avery-keller.net", custom_domain = true }]
+
+# index.html is imported as a string in worker.js — one copy of the board, no assets folder.
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = false
+
+# The key is NOT here. It is a secret:  wrangler secret put GEMINI_API_KEY

@@ -70,6 +70,10 @@
 
   .sep { width: 1px; height: 24px; background: var(--edge); }
 
+  /* the eraser is a toggle: pressed = every pen or mouse stroke erases */
+  button.act[aria-pressed="true"] { background: #ebe6da; border-color: var(--accent); }
+  #board.erasing { cursor: cell; }
+
   button.act {
     border: 1px solid var(--edge); background: var(--ui); color: var(--text);
     border-radius: 8px; padding: 7px 13px; cursor: pointer; font-size: 14px;
@@ -124,6 +128,7 @@
 
 <div id="bar">
   <div class="pens" id="pens"></div>
+  <button class="act" id="eraser" aria-pressed="false" title="Eraser — touch a stroke to remove it">Eraser</button>
   <div class="sep"></div>
   <button class="act" id="undo" title="Undo">Undo</button>
   <button class="act" id="clear" title="Clear the board">Clear</button>
@@ -142,7 +147,7 @@
 </div>
 
 <div id="status"></div>
-<div id="hint">Pen or mouse draws · finger or scroll pans</div>
+<div id="hint">Pen or mouse draws · Eraser removes a stroke · finger or scroll pans</div>
 
 <script>
 /* ============================================================
@@ -160,7 +165,15 @@ const strokes = [];      /* [{color, width, pts:[{x,y}]}]  — the student's */
 const aiMarks = [];      /* [{x, y, text, shown}]          — the AI's */
 
 let pen = PENS[0];
+let tool = 'pen';        /* 'pen' or 'eraser' */
 let drawing = null;      /* the stroke in progress */
+let erasing = null;      /* strokes removed during ONE eraser drag, for undo */
+
+/* history[] is what undo walks. Every action is either
+     {type:'add',   stroke}          — a stroke was drawn
+     {type:'erase', strokes:[...]}   — one eraser drag removed these
+   so undo can put back exactly what one gesture took away. */
+const history = [];
 let pan = {x: 0, y: 0};  /* how far the board has been dragged */
 let panFrom = null;      /* where a finger-drag started */
 
@@ -258,6 +271,15 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
 
+  /* eraser: the toolbar toggle, OR the eraser end of a pen that has one
+     (button 5 / buttons bit 32 — Surface, Wacom). Apple Pencil has neither,
+     which is why the toggle exists. */
+  if (tool === 'eraser' || e.button === 5 || (e.buttons & 32)) {
+    erasing = [];
+    eraseAt(pt(e));
+    return;
+  }
+
   /* pen pressure gives a live line width; a mouse reports 0, so fall back */
   drawing = {color: pen, width: penWidth(e), pts: [pt(e)]};
 });
@@ -267,6 +289,7 @@ cv.addEventListener('pointermove', e => {
     pan = {x: e.clientX - panFrom.x, y: e.clientY - panFrom.y};
     return redraw();
   }
+  if (erasing) return eraseAt(pt(e));
   if (!drawing) return;
   drawing.pts.push(pt(e));
   redraw();
@@ -274,9 +297,54 @@ cv.addEventListener('pointermove', e => {
 
 function done(e) {
   if (e.pointerType === 'touch') { panFrom = null; return; }
-  if (drawing && drawing.pts.length > 1) strokes.push(drawing);
+  if (erasing) {                                   /* one drag = one undo step */
+    if (erasing.length) history.push({type: 'erase', strokes: erasing});
+    erasing = null;
+    return redraw();
+  }
+  if (drawing && drawing.pts.length > 1) {
+    strokes.push(drawing);
+    history.push({type: 'add', stroke: drawing});
+  }
   drawing = null;
   redraw();
+}
+
+/* ============================================================
+   eraseAt — a stroke eraser, like OneNote's default: touch any
+   part of a stroke and the whole stroke goes. Whole strokes, not
+   pixels, because strokes[] is the memory — a pixel eraser would
+   leave the picture and the list disagreeing.
+   ============================================================ */
+const ERASER_R = 12;
+function eraseAt(p) {
+  let hit = false;
+  for (let i = strokes.length - 1; i >= 0; i--) {
+    if (strokeNear(strokes[i], p, ERASER_R)) {
+      erasing.push(strokes.splice(i, 1)[0]);
+      hit = true;
+    }
+  }
+  if (hit) redraw();
+}
+
+/* is point p within r of any segment of stroke s? */
+function strokeNear(s, p, r) {
+  const pts = s.pts;
+  for (let i = 1; i < pts.length; i++) {
+    if (segDist(pts[i - 1], pts[i], p) <= r + s.width / 2) return true;
+  }
+  return false;
+}
+
+/* distance from point p to the segment a-b */
+function segDist(a, b, p) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy || 1;
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const qx = a.x + t * dx, qy = a.y + t * dy;
+  return Math.hypot(p.x - qx, p.y - qy);
 }
 cv.addEventListener('pointerup', done);
 cv.addEventListener('pointercancel', done);
@@ -306,14 +374,35 @@ PENS.forEach((c, i) => {
   b.setAttribute('aria-label', 'Pen colour ' + (i + 1));
   b.onclick = () => {
     pen = c;
+    setTool('pen');
     [...pensEl.children].forEach(x => x.setAttribute('aria-pressed', x === b));
   };
   pensEl.appendChild(b);
 });
 
-document.getElementById('undo').onclick = () => { strokes.pop(); redraw(); };
+const eraserBtn = document.getElementById('eraser');
+eraserBtn.onclick = () => setTool(tool === 'eraser' ? 'pen' : 'eraser');
+function setTool(t) {
+  tool = t;
+  eraserBtn.setAttribute('aria-pressed', t === 'eraser');
+  cv.classList.toggle('erasing', t === 'eraser');
+}
+
+/* undo reverses the LAST ACTION — a drawn stroke, or everything one
+   eraser drag removed — so erasing is never a one-way door */
+document.getElementById('undo').onclick = () => {
+  const last = history.pop();
+  if (!last) return;
+  if (last.type === 'add') {
+    const i = strokes.indexOf(last.stroke);
+    if (i >= 0) strokes.splice(i, 1);
+  } else {
+    strokes.push(...last.strokes);
+  }
+  redraw();
+};
 document.getElementById('clear').onclick = () => {
-  strokes.length = 0; aiMarks.length = 0; redraw(); say('');
+  strokes.length = 0; aiMarks.length = 0; history.length = 0; redraw(); say('');
 };
 
 /* ============================================================
