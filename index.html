@@ -180,6 +180,22 @@
   #panel .row { display: flex; gap: 8px; margin-top: 11px; }
   #panel .row button { flex: 1; }
 
+  /* settings: bring your own key */
+  #settings {
+    position: fixed; left: 50%; top: 112px; transform: translateX(-50%); width: min(440px, calc(100vw - 32px));
+    background: var(--ui); border: 1px solid var(--edge); border-radius: 12px;
+    box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none;
+    -webkit-user-select: text; user-select: text;
+  }
+  #settings.on { display: block; }
+  #settings h2 { margin: 0 0 6px; font-size: 15px; }
+  #settings p { margin: 0 0 10px; font-size: 13.5px; }
+  #settings p.fine { font-size: 12.5px; color: var(--muted); }
+  #settings a { color: var(--accent); }
+  #settings input { width: 100%; font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); color: var(--text); }
+  #settings .row { display: flex; gap: 8px; margin-top: 10px; }
+  #settings .row button { flex: 1; }
+
   #status { position: fixed; left: 16px; bottom: 14px; z-index: 10; font-size: 13px; color: var(--muted); max-width: 50vw; }
   #status.bad { color: #a33; }
   #showRead { position: fixed; left: 16px; bottom: 40px; z-index: 10; font-size: 12.5px; padding: 5px 10px; }
@@ -204,6 +220,20 @@
   <div class="sep"></div>
   <button class="act primary" id="check">Check my work</button>
   <button class="act" id="chatBtn" aria-pressed="false" title="Talk to the tutor">Chat</button>
+  <button class="act icon" id="setBtn" title="Settings — use your own Gemini key">⚙</button>
+</div>
+<div id="settings">
+  <h2>Use your own Gemini key</h2>
+  <p>Anyone with a Google account gets a free key in one tap at
+     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
+     Paste it here and every check and chat runs on <b>your</b> free quota.</p>
+  <p class="fine">The key is kept only in this browser and sent straight to Google. It never touches Showwork's server.</p>
+  <input id="keyIn" type="password" placeholder="AIza…" autocomplete="off" spellcheck="false">
+  <div class="row">
+    <button class="act" id="keyClear">Remove</button>
+    <button class="act primary" id="keySave">Save key</button>
+  </div>
+  <p class="fine" id="keyState"></p>
 </div>
 <div id="exportMenu">
   <button class="act" id="expPage">This page → image</button>
@@ -725,7 +755,7 @@ checkEl.onclick = async () => {
 
   busy(true, 'Reading your work…');
   try {
-    const r = await post('/transcribe', {image: shot.url, context: topic()});
+    const r = await api('/transcribe', {image: shot.url, context: topic()});
     readEl.value = r.transcription;
     showRead.hidden = false;
 
@@ -755,7 +785,7 @@ async function runCheck() {
   panel.classList.remove('on');
   busy(true, 'Looking for the first thing to fix…');
   try {
-    const v = await post('/check', {image: shot.url, work: readEl.value, context: topic()});
+    const v = await api('/check', {image: shot.url, work: readEl.value, context: topic()});
     if (v.all_correct) {
       write("Nothing wrong here.\nThis is all correct.");
     } else {
@@ -780,6 +810,100 @@ async function post(path, body) {
   const data = await res.json().catch(() => ({message: 'no answer from server'}));
   if (!res.ok) throw new Error(data.message || 'something went wrong');
   return data;
+}
+
+/* ============================================================
+   BRING YOUR OWN KEY — anyone's free Gemini quota, not ours.
+
+   Google won't let a person's sign-in pay for Gemini calls (quota is a
+   Cloud project's, not a login's). The honest version is this: paste
+   your own free key, and the page calls Gemini DIRECTLY from the
+   browser with it. The key never touches Showwork's server. Without a
+   key, calls go to our server, on our quota, exactly as before.
+   api() is the fork; everything above it can't tell the difference.
+   ============================================================ */
+const G_MODEL = 'gemini-3.5-flash-lite';
+let PROMPTS = null;                                  /* same prompts.json the servers use */
+const userKey = () => { try { return localStorage.getItem('showwork.key') || ''; } catch { return ''; } };
+
+async function loadPrompts() {
+  try { PROMPTS = await (await fetch('/prompts.json')).json(); } catch { PROMPTS = null; }
+}
+
+async function api(path, body) {
+  const key = userKey();
+  if (!key || !PROMPTS) return post(path, body);    /* no key: our server, as before */
+
+  const ctx  = (body.context || '').trim().slice(0, 300);
+  const note = ctx ? PROMPTS.context_note.replace('{context}', ctx) : '';
+
+  if (path === '/transcribe') {
+    const text = await gemini(key, {contents: [{parts: [{text: note + PROMPTS.transcribe}, imgPart(body.image)]}]});
+    return {transcription: text.trim(), checks_left: null};
+  }
+  if (path === '/check') {
+    const raw = await gemini(key, {contents: [{parts: [{text: note + PROMPTS.check.replace('{work}', body.work)}, imgPart(body.image)]}]});
+    let v; try { v = JSON.parse(stripFence(raw)); } catch { v = {line: '', problem: raw.trim(), nudge: '', all_correct: false}; }
+    v.checks_left = null;
+    return v;
+  }
+  /* /chat: alternating turns, the page's picture on the last one */
+  const msgs = body.messages;
+  const contents = msgs.slice(0, -1).map(m => ({role: m.role === 'model' ? 'model' : 'user', parts: [{text: m.text}]}));
+  const last = msgs[msgs.length - 1], parts = [{text: last.text}];
+  if (body.image) parts.push(imgPart(body.image));
+  contents.push({role: 'user', parts});
+  const raw = await gemini(key, {system_instruction: {parts: [{text: note + PROMPTS.chat}]}, contents});
+  let say = raw.trim(), board = '';
+  try { const o = JSON.parse(stripFence(raw)); say = String(o.say || ''); board = String(o.board || ''); } catch {}
+  return {say, board, checks_left: null};
+}
+
+/* the one place the browser talks to Gemini */
+async function gemini(key, reqBody) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${G_MODEL}:generateContent`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
+    body: JSON.stringify(reqBody),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    if (res.status === 429) throw new Error('Your Gemini key is out of quota for now.');
+    if (res.status === 400 || res.status === 403) throw new Error('Google rejected that Gemini key — check it in ⚙.');
+    throw new Error(`Gemini ${res.status}: ${t.slice(0, 120)}`);
+  }
+  const j = await res.json();
+  return j.candidates[0].content.parts[0].text;
+}
+const imgPart = url => {
+  const [head, b64] = url.split(',', 2);
+  return {inline_data: {mime_type: head.slice(5).split(';')[0] || 'image/png', data: b64}};
+};
+function stripFence(text) {                          /* the model likes ```json fences */
+  let t = text.trim();
+  if (t.startsWith('```')) { t = t.includes('\n') ? t.slice(t.indexOf('\n') + 1) : t; t = t.slice(0, t.lastIndexOf('```')); }
+  return t.trim();
+}
+
+/* ---- the settings panel ---- */
+const settingsEl = document.getElementById('settings');
+const keyIn = document.getElementById('keyIn');
+document.getElementById('setBtn').onclick = () => { settingsEl.classList.toggle('on'); keyIn.value = ''; keyState(); };
+document.getElementById('keySave').onclick = () => {
+  const k = keyIn.value.trim();
+  if (!/^AIza[\w-]{20,}$/.test(k)) return say('That does not look like a Gemini key (they start with AIza).', true);
+  try { localStorage.setItem('showwork.key', k); } catch { return say('This browser blocks storage; the key cannot be kept.', true); }
+  keyIn.value = ''; keyState(); settingsEl.classList.remove('on'); say('Using your Gemini key.');
+};
+document.getElementById('keyClear').onclick = () => {
+  try { localStorage.removeItem('showwork.key'); } catch {}
+  keyState(); say('Back to Showwork\'s shared key.');
+};
+function keyState() {
+  const k = userKey();
+  document.getElementById('keyState').textContent = k
+    ? `A key ending in …${k.slice(-4)} is in use. Calls go straight from this browser to Google.`
+    : 'No key saved — checks and chat use Showwork\'s shared key, which has a daily limit.';
 }
 
 /* ============================================================
@@ -974,7 +1098,7 @@ document.getElementById('chatform').addEventListener('submit', async e => {
 
   try {
     const s = snapshot();                                /* null on an empty page — that's fine */
-    const r = await post('/chat', {
+    const r = await api('/chat', {
       image: s ? s.url : null,
       context: topic(),
       messages: chat.slice(-16).map(m => ({role: m.role === 'you' ? 'user' : 'model', text: m.text})),
@@ -1280,6 +1404,7 @@ function busy(on, msg) {
    ============================================================ */
 (async () => {
   fit();
+  loadPrompts();                                     /* for bring-your-own-key calls */
   const persistent = await store.init();
   if (!persistent) document.getElementById('saveNote').textContent = 'Storage is blocked here — this session won\'t be saved';
   sheets = await store.all();

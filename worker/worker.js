@@ -30,6 +30,9 @@ export default {
       if (url.pathname === "/" || url.pathname === "/index.html") {
         return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
+      if (url.pathname === "/prompts.json") {     // the browser needs them for bring-your-own-key
+        return new Response(JSON.stringify(prompts), { headers: { "Content-Type": "application/json" } });
+      }
       return json(404, { error: "not_found" });
     }
 

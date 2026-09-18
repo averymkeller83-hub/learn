@@ -142,6 +142,9 @@ class Board(SimpleHTTPRequestHandler):
         if path in ("/", "/index.html"):
             self.path = "/index.html"
             return super().do_GET()
+        if path == "/prompts.json":                        # the browser needs them for bring-your-own-key
+            self.path = "/prompts.json"
+            return super().do_GET()
         self.send_error(404)
 
     def log_message(self, fmt, *args):
