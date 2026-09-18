@@ -329,6 +329,20 @@
 </div>
 <textarea id="textEdit" rows="1" spellcheck="false"></textarea>
 
+<div id="settings">
+  <h2>Use your own Gemini key</h2>
+  <p>Anyone with a Google account gets a free key in one tap at
+     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
+     Paste it here and every check and chat runs on <b>your</b> free quota.</p>
+  <p class="fine">The key is kept only in this browser and sent straight to Google. It never touches Showwork's server.</p>
+  <input id="keyIn" type="password" placeholder="AIza…" autocomplete="off" spellcheck="false">
+  <div class="row">
+    <button class="act" id="keyClear">Remove</button>
+    <button class="act primary" id="keySave">Save key</button>
+  </div>
+  <p class="fine" id="keyState"></p>
+</div>
+
 <div id="selBar">
   <span id="selCount"></span>
   <button class="act" id="selDelete">Delete</button>
