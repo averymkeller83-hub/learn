@@ -131,7 +131,7 @@
   #side .nb select { flex: 1; min-width: 0; font: inherit; font-size: 16px; font-weight: 700; padding: 6px 4px;
                      border: 0; background: transparent; color: var(--text); appearance: none; -webkit-appearance: none; cursor: pointer; }
   #side .cols { flex: 1; display: flex; min-height: 0; }
-  #side .col { display: flex; flex-direction: column; min-height: 0; }
+  #side .col { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   #side .col.sections { width: 196px; border-right: 1px solid var(--edge); background: #efebe2; }
   #side .col.pages { flex: 1; background: var(--side); }
   #side .col h3 { margin: 10px 12px 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
@@ -139,6 +139,7 @@
   #side .item {
     text-align: left; border: 1px solid transparent; background: transparent; color: var(--text); font: inherit; font-size: 14px;
     padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    min-width: 0; max-width: 100%;
   }
   #side .item:hover { background: rgba(0,0,0,.05); }
   #side .item[aria-current="true"] { background: var(--ui); border-color: var(--edge); }
@@ -154,8 +155,8 @@
   #side .foot { font-size: 12px; color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--edge); }
 
   /* when the sidebar is open on a wide screen, the page's chrome moves right of it */
-  body.side-open #bar { left: calc(50% + 235px); }
-  body.side-open #meta { left: 496px; }
+  body.side-open #bar { left: calc(470px + (100vw - 470px) / 2); max-width: calc(100vw - 470px - 24px); }
+  body.side-open #meta { left: 498px; width: min(560px, calc(100vw - 470px - 56px)); }
   @media (max-width: 1099px) { body.side-open #bar { left: 50%; } body.side-open #meta { left: 28px; } }
 
   /* ============================================================
