@@ -1650,10 +1650,97 @@ function renderBoard(board) {
     } else if (typeof it.label === 'string' && Array.isArray(it.at)) {
       const q = P(it.at);
       aiMarks.push({x: q.x, y: q.y, size: Math.max(14, size * 0.75), text: it.label.trim(), shown: it.label.length}); sketching = shown = true;
+    } else if (Array.isArray(it.polyline) && it.polyline.length > 1) {
+      strokes.push({color: AI_INK, width: 2.6, alpha: 1, ai: true, pts: it.polyline.filter(Array.isArray).map(P)}); sketching = shown = true;
+    } else if (Array.isArray(it.polygon) && it.polygon.length > 2) {
+      const pts = it.polygon.filter(Array.isArray).map(P); pts.push({...pts[0]}, {x: pts[0].x + .01, y: pts[0].y});
+      strokes.push({color: AI_INK, width: 2.6, alpha: 1, ai: true, pts}); sketching = shown = true;
+    } else if (typeof it.plot === 'string') {
+      /* graphs share one set of axes while plots come in a row; the axes take the whole sketch area */
+      if (!plotAxes) plotAxes = makeAxes(x0, y0, W, H, it.x, it.y);
+      if (drawPlot(plotAxes, it.plot)) sketching = shown = true;
+      continue;
+    } else if (typeof it.svg === 'string' && it.svg.includes('<svg')) {
+      placeSvg(it.svg, x0, y0, W, H).then(ok => { if (ok) { redraw(); dirty(); } });
+      sketching = shown = true;
     }
+    plotAxes = null;                               /* anything that isn't a plot ends the shared axes */
   }
   redraw(); dirty();
   return shown;
+}
+let plotAxes = null;
+
+/* ============================================================
+   PLOTS — the board draws graphs itself, exactly. The model hands
+   over an expression and a range; a tiny safe evaluator (whitelisted
+   names only, no eval of arbitrary code) samples it into a stroke.
+   ============================================================ */
+function makeAxes(x0, y0, W, H, xr, yr) {
+  const xmin = Array.isArray(xr) && isFinite(+xr[0]) ? +xr[0] : -5, xmax = Array.isArray(xr) && isFinite(+xr[1]) ? +xr[1] : 5;
+  const ax = {x0, y0, W, H, xmin, xmax: xmax > xmin ? xmax : xmin + 10, ymin: null, ymax: null, exprs: []};
+  if (Array.isArray(yr) && isFinite(+yr[0]) && isFinite(+yr[1]) && +yr[1] > +yr[0]) { ax.ymin = +yr[0]; ax.ymax = +yr[1]; }
+  return ax;
+}
+function compileExpr(src) {
+  /* letters may only be these names; everything else must be a number or an operator */
+  const names = {sin: 'Math.sin', cos: 'Math.cos', tan: 'Math.tan', exp: 'Math.exp', ln: 'Math.log', log: 'Math.log10', sqrt: 'Math.sqrt',
+                 abs: 'Math.abs', pi: 'Math.PI', e: 'Math.E', x: 'x', asin: 'Math.asin', acos: 'Math.acos', atan: 'Math.atan', floor: 'Math.floor', ceil: 'Math.ceil'};
+  let js = String(src).toLowerCase().replace(/\s+/g, '').replace(/\^/g, '**').replace(/(\d)([a-z(])/g, '$1*$2').replace(/\)(\d|[a-z(])/g, ')*$1');
+  let bad = false;
+  js = js.replace(/[a-z]+/g, w => { if (!(w in names)) bad = true; return names[w] || w; });
+  if (bad || /[^0-9a-zA-Z_.+\-*/(),%]/.test(js)) return null;
+  try { const f = new Function('x', 'return (' + js + ');'); f(1); return f; } catch { return null; }
+}
+function drawPlot(ax, expr) {
+  const f = compileExpr(expr); if (!f) { say('Could not plot "' + expr + '".', true); return false; }
+  const N = 240, xs = [], ys = [];
+  for (let i = 0; i <= N; i++) { const x = ax.xmin + (ax.xmax - ax.xmin) * i / N; let y; try { y = f(x); } catch { y = NaN; } xs.push(x); ys.push(y); }
+  if (ax.ymin === null) {                          /* pick a y-range from the finite values, with a little air */
+    const fin = ys.filter(v => isFinite(v)); if (!fin.length) return false;
+    let lo = Math.min(...fin), hi = Math.max(...fin); if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+    const pad = (hi - lo) * 0.1; ax.ymin = Math.min(0, lo - pad); ax.ymax = Math.max(0, hi + pad);
+  }
+  const sx = x => ax.x0 + (x - ax.xmin) / (ax.xmax - ax.xmin) * ax.W, sy = y => ax.y0 + ax.H - (y - ax.ymin) / (ax.ymax - ax.ymin) * ax.H;
+  if (!ax.drawn) {                                 /* axes, ticks and end labels once */
+    ax.drawn = true;
+    const mk = pts => ({color: AI_INK, width: 1.6, alpha: .8, ai: true, pts});
+    const yAxisX = Math.min(Math.max(sx(0), ax.x0), ax.x0 + ax.W), xAxisY = Math.min(Math.max(sy(0), ax.y0), ax.y0 + ax.H);
+    strokes.push(mk([{x: ax.x0, y: xAxisY}, {x: ax.x0 + ax.W / 2, y: xAxisY}, {x: ax.x0 + ax.W, y: xAxisY}]));
+    strokes.push(mk([{x: yAxisX, y: ax.y0}, {x: yAxisX, y: ax.y0 + ax.H / 2}, {x: yAxisX, y: ax.y0 + ax.H}]));
+    const lab = (t, x, y) => aiMarks.push({x, y, size: 13, text: t, shown: t.length});
+    lab(fmtNum(ax.xmin), ax.x0, xAxisY + 6); lab(fmtNum(ax.xmax), ax.x0 + ax.W - 30, xAxisY + 6);
+    lab(fmtNum(ax.ymax), yAxisX + 6, ax.y0); lab(fmtNum(ax.ymin), yAxisX + 6, ax.y0 + ax.H - 16);
+    for (let i = 1; i < 10; i++) { const tx = ax.x0 + ax.W * i / 10, ty = ax.y0 + ax.H * i / 10;
+      strokes.push(mk([{x: tx, y: xAxisY - 3}, {x: tx, y: xAxisY}, {x: tx, y: xAxisY + 3}])); strokes.push(mk([{x: yAxisX - 3, y: ty}, {x: yAxisX, y: ty}, {x: yAxisX + 3, y: ty}])); }
+  }
+  let run = [];
+  const flush = () => { if (run.length > 1) strokes.push({color: AI_INK, width: 2.6, alpha: 1, ai: true, pts: run}); run = []; };
+  for (let i = 0; i <= N; i++) {
+    const y = ys[i];
+    if (!isFinite(y) || y < ax.ymin - (ax.ymax - ax.ymin) || y > ax.ymax + (ax.ymax - ax.ymin)) { flush(); continue; }
+    run.push({x: sx(xs[i]), y: Math.min(ax.y0 + ax.H + 40, Math.max(ax.y0 - 40, sy(y)))});
+  }
+  flush();
+  const t = 'y = ' + expr; aiMarks.push({x: ax.x0 + ax.W - Math.min(ax.W / 2, t.length * 8), y: ax.y0 + 4 + ax.exprs.length * 18, size: 14, text: t, shown: t.length});
+  ax.exprs.push(expr);
+  return true;
+}
+const fmtNum = v => (Math.abs(v) >= 100 || Number.isInteger(v)) ? String(Math.round(v)) : String(+v.toFixed(2));
+
+/* an SVG diagram from the model, rendered to a picture in the sketch area (its own colours kept) */
+async function placeSvg(markup, x0, y0, W, H) {
+  try {
+    const clean = markup.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+="[^"]*"/gi, '').replace(/href="javascript:[^"]*"/gi, '');
+    const blob = new Blob([clean], {type: 'image/svg+xml'}), url = URL.createObjectURL(blob);
+    const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('bad SVG')); im.src = url; });
+    const iw = img.naturalWidth || 400, ih = img.naturalHeight || 300, k = Math.min(W / iw, H / ih, 2);
+    const c = document.createElement('canvas'); c.width = Math.round(iw * k * 2); c.height = Math.round(ih * k * 2);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+    const q = {bytes: await (await fetch('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(clean))).arrayBuffer(), x: x0, y: y0, w: iw * k, h: ih * k};
+    pics.push(q); pages.push({img: c, x: q.x, y: q.y, w: q.w, h: q.h, pic: true});
+    return true;
+  } catch (e) { say('The diagram could not be drawn: ' + e.message, true); return false; }
 }
 
 /* a shape in the tutor's ink: line, arrow (line + head), rect, ellipse */
@@ -2008,7 +2095,14 @@ async function openPage(rec, {quiet = false} = {}) {
   }
   pics.length = 0;
   for (const q of (rec.pics || [])) {
-    try { const img = await createImageBitmap(new Blob([q.bytes])); pics.push(q); pages.push({img, x: q.x, y: q.y, w: q.w, h: q.h, pic: true}); }
+    try {
+      const head = new TextDecoder().decode(q.bytes.slice(0, 200));
+      const img = head.includes('<svg')                          /* an SVG the tutor drew: rasterise via <img> */
+        ? await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('bad SVG'));
+                                            im.src = URL.createObjectURL(new Blob([q.bytes], {type: 'image/svg+xml'})); })
+        : await createImageBitmap(new Blob([q.bytes]));
+      pics.push(q); pages.push({img, x: q.x, y: q.y, w: q.w, h: q.h, pic: true});
+    }
     catch (e) { say('Could not re-open a picture: ' + e.message, true); }
   }
   applyExamState(); redraw(); renderChat(); renderSide(); renderSources();
