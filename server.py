@@ -243,7 +243,13 @@ class Board(SimpleHTTPRequestHandler):
                     "error": "no_work",
                     "message": "Confirm the transcription first."})
 
-            raw = ask_vision(note + CHECK_PROMPT.replace("{work}", work), png, mime)
+            # ---- an exam page asks to be GRADED whole, not checked for one error ----
+            if data.get("mode") == "grade":
+                n = str(int(data.get("n") or 5))
+                prompt = PROMPTS["grade"].replace("{work}", work).replace("{n}", n)
+            else:
+                prompt = CHECK_PROMPT.replace("{work}", work)
+            raw = ask_vision(note + prompt, png, mime)
 
             # ---- the model was asked for JSON. If it obliged, pass it ----
             # ---- through. If it rambled, hand the ramble over rather  ----

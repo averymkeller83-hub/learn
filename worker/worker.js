@@ -87,7 +87,11 @@ export default {
       const work = (data.work || "").trim();
       if (!work) return json(400, { error: "no_work", message: "Confirm the transcription first." });
 
-      const raw = await askVision(env, note + prompts.check.replace("{work}", work), b64, mime);
+      // an exam page asks to be GRADED whole, not checked for one error
+      const prompt = data.mode === "grade"
+        ? prompts.grade.replace("{work}", work).replace(/\{n\}/g, String(parseInt(data.n) || 5))
+        : prompts.check.replace("{work}", work);
+      const raw = await askVision(env, note + prompt, b64, mime);
 
       // asked for JSON; if it obliged pass it through, if it rambled hand the ramble over
       let verdict;
