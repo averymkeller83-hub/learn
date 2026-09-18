@@ -1454,6 +1454,7 @@ async function post(path, body) {
    api() is the fork; everything above it can't tell the difference.
    ============================================================ */
 const G_MODEL = 'gemini-3.5-flash-lite';
+const JSON_MODE = {response_mime_type: 'application/json'};   /* valid JSON back, no fences, no bracket slips */
 let PROMPTS = null;                                  /* same prompts.json the servers use */
 const userKey = () => { try { return localStorage.getItem('showwork.key') || ''; } catch { return ''; } };
 
@@ -1478,7 +1479,7 @@ async function api(path, body) {
     const prompt = body.mode === 'grade'
       ? PROMPTS.grade.replace('{work}', body.work).replace(/\{n\}/g, String(body.n || 5))
       : PROMPTS.check.replace('{work}', body.work);
-    const raw = await gemini(key, {contents: [{parts: [{text: note + prompt}, imgPart(body.image)]}]});
+    const raw = await gemini(key, {contents: [{parts: [{text: note + prompt}, imgPart(body.image)]}], generationConfig: JSON_MODE});
     let v; try { v = JSON.parse(stripFence(raw)); } catch { v = {line: '', problem: raw.trim(), nudge: '', all_correct: false}; }
     v.checks_left = null;
     return v;
@@ -1489,7 +1490,7 @@ async function api(path, body) {
   const last = msgs[msgs.length - 1], parts = [{text: last.text}];
   if (body.image) parts.push(imgPart(body.image));
   contents.push({role: 'user', parts});
-  const raw = await gemini(key, {system_instruction: {parts: [{text: note + PROMPTS.chat}]}, contents});
+  const raw = await gemini(key, {system_instruction: {parts: [{text: note + PROMPTS.chat}]}, contents, generationConfig: JSON_MODE});
   let say = raw.trim(), board = '';
   try { const o = JSON.parse(stripFence(raw)); say = String(o.say || ''); board = o.board ?? ''; } catch {}
   return {say, board, checks_left: null};
@@ -1888,6 +1889,9 @@ document.getElementById('chatform').addEventListener('submit', async e => {
       sources: sourcesFor(topic() + ' ' + text + ' ' + chat.slice(-3).map(m => m.text).join(' ')),
       messages: chat.slice(-16).map(m => ({role: m.role === 'you' ? 'user' : 'model', text: m.text})),
     });
+    if (typeof r.say === 'string' && /^\s*(```|\{)/.test(r.say)) {          /* a raw JSON reply that slipped through */
+      try { const o = JSON.parse(stripFence(r.say)); r.say = String(o.say || ''); r.board = o.board ?? r.board; } catch {}
+    }
     const shown = renderBoard(r.board);
     chat.push({role: 'ai', text: (r.say || '').trim() || '…', board: shown});
   } catch (err) {

@@ -95,7 +95,7 @@ export default {
       const prompt = data.mode === "grade"
         ? prompts.grade.replace("{work}", work).replace(/\{n\}/g, String(parseInt(data.n) || 5))
         : prompts.check.replace("{work}", work);
-      const raw = await askVision(env, note + prompt, b64, mime);
+      const raw = await askVision(env, note + prompt, b64, mime, true);
 
       // asked for JSON; if it obliged pass it through, if it rambled hand the ramble over
       let verdict;
@@ -117,11 +117,17 @@ export default {
 // askVision — the phone line to the brain, with a picture attached.
 // IN: env (for the key), a prompt, the PNG as base64.  OUT: words.
 // ============================================================
-async function askVision(env, prompt, b64, mime = "image/png") {
-  return askGemini(env, { contents: [{ parts: [
+// Gemini's JSON mode: the answer IS valid JSON - no fences, no bracket slips.
+// Used wherever we parse the reply (check, grade, chat). Not transcribe.
+const JSON_MODE = { response_mime_type: "application/json" };
+
+async function askVision(env, prompt, b64, mime = "image/png", wantJson = false) {
+  const body = { contents: [{ parts: [
     { text: prompt },
     { inline_data: { mime_type: mime, data: b64 } },
-  ]}]});
+  ]}]};
+  if (wantJson) body.generationConfig = JSON_MODE;
+  return askGemini(env, body);
 }
 
 // a conversation: alternating user/model turns, the page's picture on the
@@ -133,7 +139,7 @@ function chatBody(system, messages, b64, mime) {
   const parts = [{ text: String(last.text || "") }];
   if (b64) parts.push({ inline_data: { mime_type: mime, data: b64 } });
   contents.push({ role: "user", parts });
-  return { system_instruction: { parts: [{ text: system }] }, contents };
+  return { system_instruction: { parts: [{ text: system }] }, contents, generationConfig: JSON_MODE };
 }
 
 // a linked web page as readable text: the browser can't read other sites

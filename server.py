@@ -68,15 +68,23 @@ CHECK_PROMPT = PROMPTS["check"]          # contains {work}, filled in below
 # IN:  a prompt, and the board as PNG bytes
 # OUT: whatever the model said, as text
 # ============================================================
-def ask_vision(prompt, img_bytes, mime="image/png"):
-    """Send one image and one question. Get words back."""
+def ask_vision(prompt, img_bytes, mime="image/png", want_json=False):
+    """Send one image and one question. Get words back (valid JSON if asked)."""
 
     # ---- the picture rides as base64 text inside the JSON ----
-    return ask({"contents": [{"parts": [
+    body = {"contents": [{"parts": [
         {"text": prompt},
         {"inline_data": {"mime_type": mime,
                          "data": base64.b64encode(img_bytes).decode()}},
-    ]}]})
+    ]}]}
+    if want_json:
+        body["generationConfig"] = JSON_MODE
+    return ask(body)
+
+
+# Gemini's JSON mode: the answer IS valid JSON, no fences, no bracket slips.
+# Used wherever we parse the reply - check, grade and chat. Not transcribe.
+JSON_MODE = {"response_mime_type": "application/json"}
 
 
 def ask(body):
@@ -109,7 +117,8 @@ def chat_body(system, messages, img_bytes=None, mime="image/png"):
         parts.append({"inline_data": {"mime_type": mime,
                                       "data": base64.b64encode(img_bytes).decode()}})
     contents.append({"role": "user", "parts": parts})
-    return {"system_instruction": {"parts": [{"text": system}]}, "contents": contents}
+    return {"system_instruction": {"parts": [{"text": system}]}, "contents": contents,
+            "generationConfig": JSON_MODE}
 
 
 # ============================================================
@@ -281,7 +290,7 @@ class Board(SimpleHTTPRequestHandler):
                 prompt = PROMPTS["grade"].replace("{work}", work).replace("{n}", n)
             else:
                 prompt = CHECK_PROMPT.replace("{work}", work)
-            raw = ask_vision(note + prompt, png, mime)
+            raw = ask_vision(note + prompt, png, mime, want_json=True)
 
             # ---- the model was asked for JSON. If it obliged, pass it ----
             # ---- through. If it rambled, hand the ramble over rather  ----
