@@ -126,6 +126,7 @@
     font-size: 13px; color: var(--muted); max-width: 60vw;
   }
   #status.bad { color: #a33; }
+  #showRead { position: fixed; right: 16px; bottom: 12px; z-index: 10; font-size: 12.5px; padding: 5px 10px; }
 
   #hint {
     position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
@@ -153,16 +154,17 @@
 <input id="topic" placeholder="What are you working on? e.g. M220 — tangent lines with the power rule" autocomplete="off" spellcheck="false">
 
 <div id="panel">
-  <h2>Here's what I read</h2>
-  <p class="why">Fix anything I got wrong before I say a word about it. Where I wasn't sure, my other guess is in [brackets] — keep the right one.</p>
+  <h2 id="panelTitle">Here's what I read</h2>
+  <p class="why" id="panelWhy"></p>
   <textarea id="read" spellcheck="false"></textarea>
   <div class="row">
     <button class="act" id="cancel">Cancel</button>
-    <button class="act primary" id="confirm">That's right — check it</button>
+    <button class="act primary" id="confirm">Check it</button>
   </div>
 </div>
 
 <div id="status"></div>
+<button class="act" id="showRead" hidden title="See or fix what was read from your handwriting">What I read ▸</button>
 <div id="hint">Pen or mouse draws · Eraser removes a stroke · two fingers pan and zoom</div>
 
 <script>
@@ -539,6 +541,7 @@ document.getElementById('undo').onclick = () => {
 };
 document.getElementById('clear').onclick = () => {
   strokes.length = 0; aiMarks.length = 0; history.length = 0; redraw(); say('');
+  showRead.hidden = true;
 };
 
 /* ============================================================
@@ -609,6 +612,10 @@ try { topicEl.value = localStorage.getItem('showwork.topic') || ''; } catch {}
 topicEl.addEventListener('input', () => { try { localStorage.setItem('showwork.topic', topicEl.value); } catch {} });
 const topic = () => topicEl.value.trim();
 
+const showRead = document.getElementById('showRead');
+const panelTitle = document.getElementById('panelTitle');
+const panelWhy = document.getElementById('panelWhy');
+
 checkEl.onclick = async () => {
   shot = snapshot();
   if (!shot) return say('Write something first.', true);
@@ -617,16 +624,33 @@ checkEl.onclick = async () => {
   try {
     const r = await post('/transcribe', {image: shot.url, context: topic()});
     readEl.value = r.transcription;
+    showRead.hidden = false;
+
+    /* The model marks anything it wasn't sure of in [brackets]. If there
+       are none, don't stop to ask — go straight to the check. If there
+       are, ask ONLY about those, because tutoring on a misread is worse
+       than no tutoring. The reading stays one tap away either way. */
+    const doubts = (r.transcription.match(/\[[^\]]*\]/g) || []).length;
+    if (doubts === 0) return runCheck();
+
+    panelTitle.textContent = doubts === 1 ? "One spot I wasn't sure about" : `${doubts} spots I wasn't sure about`;
+    panelWhy.textContent = "My other guess is in [brackets]. Keep the right one, then check.";
     panel.classList.add('on');
     readEl.focus();
-    say(`${r.checks_left} checks left`);
   } catch (e) { say(e.message, true); }
   busy(false);
 };
 
+/* "What I read" — see or fix the reading any time, and re-check with it */
+showRead.onclick = () => {
+  panelTitle.textContent = "Here's what I read";
+  panelWhy.textContent = "Fix anything I got wrong, then check again.";
+  panel.classList.add('on');
+};
 document.getElementById('cancel').onclick = () => panel.classList.remove('on');
+document.getElementById('confirm').onclick = () => runCheck();
 
-document.getElementById('confirm').onclick = async () => {
+async function runCheck() {
   panel.classList.remove('on');
   busy(true, 'Looking for the first thing to fix…');
   try {
@@ -634,10 +658,10 @@ document.getElementById('confirm').onclick = async () => {
     write(v.all_correct
       ? "Nothing wrong here.\nThis is all correct."
       : `${v.problem}\n${v.nudge}`);
-    say(v.all_correct ? 'All correct.' : `${v.checks_left} checks left`);
+    say(v.all_correct ? 'All correct.' : (v.checks_left != null ? `${v.checks_left} checks left` : ''));
   } catch (e) { say(e.message, true); }
   busy(false);
-};
+}
 
 async function post(path, body) {
   const res = await fetch(path, {
