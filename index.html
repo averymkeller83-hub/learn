@@ -477,7 +477,7 @@
       <button class="tab" data-tab="view">View</button>
     </div>
     <div class="grow"></div>
-    <button class="act" id="teachBtn" title="Learn something new — the tutor plans a lesson and teaches it step by step"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#f-hat_graduation"/></svg><span class="lbl">Teach me…</span></button>
+    <button class="act" id="teachBtn" title="Teach me the problem on the page (or the part I circled) — or, on an empty page, something new"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#f-hat_graduation"/></svg><span class="lbl">Teach me…</span></button>
     <button class="act primary" id="check"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#f-checkmark_circle"/></svg><span class="lbl">Check my work</span></button>
     <button class="ibtn" id="chatBtn" aria-pressed="false" title="Talk to the tutor"><svg width="20" height="20"><use href="#f-chat"/></svg></button>
   </div>
@@ -626,7 +626,7 @@
 </div>
 
 <div id="teach">
-  <h2>What do you want to learn?</h2>
+  <h2>What would you like to learn today?</h2>
   <p class="fine">Anything — long division, the French subjunctive, how a bill becomes law, Python loops, reading a guitar chord chart.
      The tutor asks what you already know, puts a plan on the board, and teaches it one step at a time.</p>
   <input id="teachTopic" placeholder="e.g. how to tell time on an analog clock" autocomplete="off">
@@ -1769,8 +1769,8 @@ document.getElementById('clear').onclick = () => {
    page — that page, because the printed problem is context the model
    badly needs. Pages the ink never touched stay out.
    ============================================================ */
-function snapshot({withAI = false} = {}) {
-  let box = bounds();
+function snapshot({withAI = false, box: want = null} = {}) {
+  let box = want || bounds();
   if (!box) return null;
   if (withAI) for (const m of aiMarks) box = union(box, markBox(m));
 
@@ -2512,7 +2512,8 @@ document.getElementById('chatform').addEventListener('submit', async e => {
   msgsEl.appendChild(thinking); msgsEl.scrollTop = msgsEl.scrollHeight;
 
   try {
-    const s = snapshot();                                /* null on an empty page — that's fine */
+    const s = pendingShot || snapshot();                 /* null on an empty page — that's fine */
+    pendingShot = null;
     const r = await api('/chat', {
       image: s ? s.url : null,
       context: topic(), subject: subject(),
@@ -3043,9 +3044,32 @@ function setSubject(k) {
 }
 subjectSel.onchange = () => setSubject(subjectSel.value);
 
-/* Teach me…: a fresh page named for the topic, the level saved, and the lesson opened in the chat */
+/* Teach me…
+   With work on the page, the lesson is about THAT: the problem you wrote or
+   the worksheet you brought — or, if you've circled part of it with Select,
+   just that part. Nothing to name, one tap. On an empty page there's nothing
+   to teach yet, so it asks what you'd like to learn today, opens a fresh
+   page named for it, and the lesson starts in the chat. */
 const teachEl = document.getElementById('teach');
-document.getElementById('teachBtn').onclick = () => { teachEl.classList.toggle('on'); coachTick(); document.getElementById('teachLevel').value = learnerLevel() || 'college'; teachSubject.value = subject(); document.getElementById('teachTopic').focus(); };
+let pendingShot = null;                                 /* a picture for the NEXT chat message to carry */
+const pageHasWork = () => !!bounds() || pages.length > 0 || pics.length > 0;
+document.getElementById('teachBtn').onclick = () => {
+  if (pageHasWork()) return teachThis();
+  teachEl.classList.toggle('on'); coachTick(); document.getElementById('teachLevel').value = learnerLevel() || 'college'; teachSubject.value = subject(); document.getElementById('teachTopic').focus();
+};
+function teachThis() {
+  const circled = !!(selection && selectionBox());
+  let box = circled ? selectionBox() : bounds();
+  if (!box) for (const pg of pages) box = union(box, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h});   /* a worksheet with no ink yet */
+  /* the picture is the student's work; the tutor's own marks stay out unless
+     the tutor's work is all that was circled */
+  const onlyAI = circled && !selection.strokes.length && !(selection.texts || []).length;
+  pendingShot = snapshot({box, withAI: onlyAI});
+  teachEl.classList.remove('on');
+  if (!chatEl.classList.contains('open')) chatBtn.onclick();
+  chatIn.value = `Teach me the problem ${circled ? 'I circled' : 'on this page'}. Don't just solve it — ask what I already know, put a plan on the board, and take me through it one step at a time.`;
+  document.getElementById('chatform').requestSubmit();
+}
 document.getElementById('teachTopic').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('teachGo').onclick(); });
 document.getElementById('teachGo').onclick = async () => {
   const what = document.getElementById('teachTopic').value.trim(); if (!what) return say('Type what you want to learn.', true);
@@ -3677,7 +3701,7 @@ const TOUR = [
   { text: "That's the idea. You can also just ask — the chat can see this page, and it draws on it when it needs to show you something.",
     target: 'chatBtn' },
 
-  { text: "Last thing, and it's the best one: tap Teach me… and name anything you want to learn — long division, the Spanish past tense, how a bill becomes law. It asks what you already know, puts a plan on the page, and teaches it a step at a time.",
+  { text: "Last thing, and it's the best one: with a problem on the page, tap Teach me… and the tutor teaches you that problem — circle part of it first to narrow it down. On an empty page it asks what you'd like to learn today: long division, the Spanish past tense, how a bill becomes law. It asks what you already know, puts a plan on the page, and teaches it a step at a time.",
     target: 'teachBtn',
     until: cb => { coachWait = () => { if (teachEl.classList.contains('on')) cb(); }; } },
 ];
