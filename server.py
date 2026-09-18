@@ -26,6 +26,7 @@ import base64
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
@@ -33,7 +34,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 # THE BRAIN — same swappable seam as agent-from-scratch.
 # Changing models touches these three lines and nothing else.
 # ============================================================
-MODEL = "gemini-3.5-flash"
+MODEL = "gemini-3.5-flash-lite"   # 2026-09-17: ~10x faster than flash on this task, passed both check tests
 BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 ASK_URL = f"{BASE}/{MODEL}:generateContent"
 
@@ -113,7 +114,8 @@ class Board(SimpleHTTPRequestHandler):
     # stray .env one URL away. House rule 1: secrets never leave.
     # --------------------------------------------------------
     def do_GET(self):
-        if self.path in ("/", "/index.html"):
+        path = urllib.parse.urlsplit(self.path).path      # drop "?t=3" and the like
+        if path in ("/", "/index.html"):
             self.path = "/index.html"
             return super().do_GET()
         self.send_error(404)

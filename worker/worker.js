@@ -18,7 +18,7 @@ import prompts from "../prompts.json"; // the two prompts — same file server.p
 // ============================================================
 // THE BRAIN — the swappable seam. Change the model here, nowhere else.
 // ============================================================
-const MODEL   = "gemini-3.5-flash";
+const MODEL   = "gemini-3.5-flash-lite";  // 2026-09-17: ~10x faster than flash here, passed both check tests
 const ASK_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 export default {

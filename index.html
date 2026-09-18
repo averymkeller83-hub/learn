@@ -47,7 +47,8 @@
   }
 
   /* ---- the board fills everything; the UI floats over it ---- */
-  #board { position: fixed; inset: 0; display: block; cursor: crosshair; touch-action: none; }
+  #board { position: fixed; inset: 0; display: block; cursor: crosshair; touch-action: none;
+           -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 
   /* ============================================================
      THE TOOLBAR — one row, no modes to learn. Pick up a pen, write.
@@ -159,7 +160,7 @@
 </div>
 
 <div id="status"></div>
-<div id="hint">Pen or mouse draws · Eraser removes a stroke · one finger pans · two fingers zoom</div>
+<div id="hint">Pen or mouse draws · Eraser removes a stroke · two fingers pan and zoom</div>
 
 <script>
 /* ============================================================
@@ -297,7 +298,8 @@ function getCSS(name) {
    screen while you write, the way you do on paper.
    ============================================================ */
 let lastPenAt = 0;       /* when the pen last touched — a palm lands right after */
-const PALM_MS = 600;     /* a finger inside this window of pen contact is a palm */
+const PALM_MS = 1500;    /* a finger inside this window of pen contact is a palm */
+let penSeen = false;     /* once a real pen has touched, single fingers are palms, full stop */
 
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
@@ -309,6 +311,12 @@ cv.addEventListener('pointerdown', e => {
     if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;
 
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    /* Once a pen has been used this session, one finger is a palm — it
+       never pans. Two fingers still pan and zoom (the pinch tracks its
+       midpoint, so moving both fingers moves the paper). This is how
+       GoodNotes and Procreate behave, and it is what makes resting
+       your hand on the glass safe. */
+    if (penSeen && touches.size === 1) return;
     if (touches.size === 2) {                /* second finger: a pinch begins */
       const [a, b] = [...touches.values()];
       pinch = {dist: Math.hypot(a.x - b.x, a.y - b.y),
@@ -322,6 +330,7 @@ cv.addEventListener('pointerdown', e => {
   }
 
   lastPenAt = performance.now();
+  if (e.pointerType === 'pen') penSeen = true;
   panFrom = null; pinch = null; touches.clear();   /* pen wins over fingers */
 
   /* eraser: the toolbar toggle, OR the eraser end of a pen that has one
