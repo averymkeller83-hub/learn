@@ -253,6 +253,15 @@
              max-height: calc(100vh - 160px); overflow: auto; background: var(--ui); border: 1px solid var(--edge); border-radius: 12px;
              box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none; -webkit-user-select: text; user-select: text; }
   #sources.on { display: block; }
+  #onenote { position: fixed; left: 50%; top: 130px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 160px); overflow: auto;
+             background: var(--ui); border: 1px solid var(--edge); border-radius: 12px; box-shadow: 0 4px 22px rgba(0,0,0,.09); padding: 16px; z-index: 25; display: none; -webkit-user-select: text; user-select: text; }
+  #onenote.on { display: block; }
+  #onenote h2 { margin: 0 0 6px; font-size: 15px; } #onenote p { margin: 0 0 10px; font-size: 13.5px; } #onenote p.fine { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  #onenote code { background: #efe9f5; padding: 0 4px; border-radius: 4px; }
+  #onenote .row { display: flex; gap: 8px; align-items: center; } #onenote .row input { flex: 1; min-width: 0; font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--edge); border-radius: 8px; background: var(--paper); color: var(--text); }
+  #onenote .list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 10px; }
+  #onenote .nbk { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 8px; font-size: 13.5px; }
+  #onenote .nbk .meta { color: var(--muted); font-size: 12px; }
   #sources h2 { margin: 0 0 6px; font-size: 15px; } #sources h2 span { color: var(--muted); font-weight: 400; }
   #sources p { margin: 0 0 10px; font-size: 13.5px; } #sources p.fine { font-size: 12.5px; color: var(--muted); }
   #sources .list { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 12px; }
@@ -344,6 +353,7 @@
   <symbol id="f-zoom_in" viewBox="0 0 24 24"><path d="M10 6.5c.41 0 .75.34.75.75v2h2a.75.75 0 0 1 0 1.5h-2v2a.75.75 0 0 1-1.5 0v-2h-2a.75.75 0 0 1 0-1.5h2v-2c0-.41.34-.75.75-.75M10 2a8 8 0 0 1 6.16 13.1l4.62 4.62a.75.75 0 0 1-1.06 1.06l-4.62-4.62A8 8 0 1 1 10 2m0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13"/></symbol>
   <symbol id="f-zoom_out" viewBox="0 0 24 24"><path d="M12.75 9.25a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1 0-1.5zM10 2a8 8 0 0 1 6.16 13.1l4.62 4.62a.75.75 0 0 1-1.06 1.06l-4.62-4.62A8 8 0 1 1 10 2m0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13"/></symbol>
   <symbol id="f-calculator" viewBox="0 0 24 24"><path d="M7 7c0-1.1.9-2 2-2h6a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2zm2-.5a.5.5 0 0 0-.5.5v1c0 .28.22.5.5.5h6a.5.5 0 0 0 .5-.5V7a.5.5 0 0 0-.5-.5zm-.75 8a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5m1.25 2.75a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0m6.25-2.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5M17 17.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0m-5-2.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5m1.25 2.75a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0M7.25 2A3.25 3.25 0 0 0 4 5.25v13.5C4 20.55 5.46 22 7.25 22h9.5c1.8 0 3.25-1.46 3.25-3.25V5.25C20 3.45 18.54 2 16.75 2zM5.5 5.25c0-.97.78-1.75 1.75-1.75h9.5c.97 0 1.75.78 1.75 1.75v13.5c0 .97-.78 1.75-1.75 1.75h-9.5c-.97 0-1.75-.78-1.75-1.75z"/></symbol>
+  <symbol id="f-arrow_download" viewBox="0 0 24 24"><path d="M18.25 20.5a.75.75 0 1 1 0 1.5h-13a.75.75 0 1 1 0-1.5zm-6.6-18.49h.1c.38 0 .7.28.74.64l.01.1v13.7l3.72-3.73a.75.75 0 0 1 .98-.07l.08.07c.27.27.3.68.07.98l-.07.08-5 5a.75.75 0 0 1-.97.07l-.09-.07-5-5a.75.75 0 0 1 .98-1.13l.08.07L11 16.43V2.76c0-.38.28-.7.65-.75h.1z"/></symbol>
 </svg>
 
 <div id="ribbon">
@@ -486,6 +496,25 @@
   <p class="fine" id="srcState">Indexed on this device only. Nothing is uploaded until a check or chat needs a passage.</p>
 </div>
 
+<div id="onenote">
+  <h2>Import from OneNote</h2>
+  <div id="onSetup">
+    <p>Sign in with your Microsoft account and pick a notebook; its sections and pages come in here, with their text and pictures.</p>
+    <p class="fine" id="onNeed">Showwork needs a Microsoft app registration to sign people in. One-time, free, five minutes:
+      <b>portal.azure.com → App registrations → New</b> · name it Showwork · account type <b>Personal Microsoft accounts and any org</b> ·
+      platform <b>Single-page application</b>, redirect URI <code id="onRedirect"></code> · under <b>API permissions</b> add Microsoft Graph
+      <b>Notes.Read</b> and <b>User.Read</b>. Paste the <b>Application (client) ID</b> below.</p>
+    <div class="row"><input id="msClientIn" placeholder="Application (client) ID" autocomplete="off" spellcheck="false"><button class="act" id="msSave">Save</button></div>
+    <div class="row" style="margin-top:8px"><button class="act primary" id="onSignIn" style="flex:1">Sign in with Microsoft</button></div>
+  </div>
+  <div id="onPick" hidden>
+    <p>Signed in. Choose a notebook to import:</p>
+    <div class="list" id="onNotebooks"></div>
+    <p class="fine" id="onProgress"></p>
+    <div class="row"><button class="act" id="onSignOut">Sign out</button><button class="act" id="onClose">Close</button></div>
+  </div>
+</div>
+
 <div id="settings">
   <h2>Settings</h2>
   <label class="opt"><input type="checkbox" id="calcOpt" checked> <span><b>Calculator</b> — typing <code>3*(4+5) =</code> in a text box fills in the answer, and the tutor may do arithmetic. Turn it off to make the student do every number.</span></label>
@@ -526,6 +555,7 @@
     <svg><use href="#i-book"/></svg>
     <select id="nbSel" title="Switch notebook"></select>
     <button class="act icon" id="srcBtn" title="Textbooks &amp; sources for this notebook"><svg width="18" height="18" style="vertical-align:-3px"><use href="#f-document_add"/></svg></button>
+    <button class="act icon" id="onenoteBtn" title="Import a notebook from OneNote"><svg width="18" height="18" style="vertical-align:-3px"><use href="#f-arrow_download"/></svg></button>
     <button class="act icon" id="nbAdd" title="New notebook">+</button>
     <button class="act icon" id="sideClose" title="Hide">‹</button>
   </div>
@@ -2342,6 +2372,148 @@ document.getElementById('srcLinkBtn').onclick = async () => {
   try { await addLinkSource(url); document.getElementById('srcUrl').value = ''; } catch (err) { say('Could not add that link: ' + err.message, true); }
 };
 
+/* ============================================================
+   IMPORT FROM ONENOTE — sign in with Microsoft (OAuth 2 + PKCE, no
+   secret, straight from the browser), list the person's notebooks
+   via Microsoft Graph, and bring one in: each section, each page,
+   the page's text as text boxes and its pictures as pictures.
+   Needs an app registration (a public client id) - a one-time
+   portal step; until it's there the panel shows how.
+   ============================================================ */
+const MS_CLIENT_ID = '';                                   /* paste the Application (client) ID here, or in the panel */
+const MS_AUTH  = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
+const MS_TOKEN = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+const MS_SCOPE = 'Notes.Read User.Read';
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+const onEl = document.getElementById('onenote');
+const msClientId = () => { try { return localStorage.getItem('showwork.msclient') || MS_CLIENT_ID; } catch { return MS_CLIENT_ID; } };
+let msToken = null; try { msToken = sessionStorage.getItem('showwork.mstoken'); } catch {}
+document.getElementById('onRedirect').textContent = location.origin + '/';
+
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function msSignIn() {
+  const id = msClientId(); if (!id) return say('Save the Microsoft client ID first.', true);
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
+  try { sessionStorage.setItem('showwork.pkce', JSON.stringify({verifier, state})); } catch { return say('This browser blocks session storage; sign-in cannot continue.', true); }
+  await save();
+  location.href = msAuthUrl(id, challenge, state);
+}
+function msAuthUrl(id, challenge, state) {
+  const q = new URLSearchParams({client_id: id, response_type: 'code', redirect_uri: location.origin + '/', response_mode: 'query',
+                                 scope: MS_SCOPE, code_challenge: challenge, code_challenge_method: 'S256', state});
+  return MS_AUTH + '?' + q;
+}
+/* back from Microsoft with ?code=... : trade it for a token, clean the URL, open the picker */
+async function msFinishSignIn() {
+  const u = new URL(location.href), code = u.searchParams.get('code'), state = u.searchParams.get('state');
+  if (!code) return false;
+  let pk = null; try { pk = JSON.parse(sessionStorage.getItem('showwork.pkce') || 'null'); sessionStorage.removeItem('showwork.pkce'); } catch {}
+  history.replaceState(null, '', location.pathname);
+  if (!pk || pk.state !== state) { say('Microsoft sign-in did not match this session — try again.', true); return false; }
+  try {
+    const res = await fetch(MS_TOKEN, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({client_id: msClientId(), grant_type: 'authorization_code', code, redirect_uri: location.origin + '/', code_verifier: pk.verifier, scope: MS_SCOPE})});
+    const tok = await res.json();
+    if (!res.ok || !tok.access_token) throw new Error(tok.error_description || tok.error || 'no token');
+    msToken = tok.access_token; try { sessionStorage.setItem('showwork.mstoken', msToken); } catch {}
+    return true;
+  } catch (e) { say('Microsoft sign-in failed: ' + String(e.message).slice(0, 160), true); return false; }
+}
+async function graph(path, raw = false) {
+  const res = await fetch(path.startsWith('http') ? path : GRAPH + path, {headers: {Authorization: 'Bearer ' + msToken}});
+  if (res.status === 401) { msToken = null; try { sessionStorage.removeItem('showwork.mstoken'); } catch {} throw new Error('signed out — sign in again'); }
+  if (!res.ok) throw new Error(`Microsoft Graph ${res.status}`);
+  return raw ? res : res.json();
+}
+async function graphAll(path) {                            /* follow @odata.nextLink */
+  let out = [], next = path;
+  while (next) { const j = await graph(next); out = out.concat(j.value || []); next = j['@odata.nextLink'] || null; }
+  return out;
+}
+function showOnenote() {
+  onEl.classList.add('on');
+  const signed = !!msToken;
+  document.getElementById('onSetup').hidden = signed; document.getElementById('onPick').hidden = !signed;
+  document.getElementById('onNeed').hidden = !!msClientId();
+  document.getElementById('msClientIn').value = msClientId();
+  if (signed) listNotebooks().catch(e => say(e.message, true));
+}
+async function listNotebooks() {
+  const list = document.getElementById('onNotebooks'); list.innerHTML = '<div class="fine" style="font-size:13px;color:var(--muted)">Loading your notebooks…</div>';
+  const nbs = await graphAll('/me/onenote/notebooks?$expand=sections($select=id,displayName)&$orderby=lastModifiedDateTime desc');
+  list.innerHTML = '';
+  if (!nbs.length) list.textContent = 'No notebooks found in this account.';
+  for (const nb of nbs) {
+    const row = document.createElement('div'); row.className = 'nbk';
+    const name = document.createElement('span'); name.textContent = '📓 ' + nb.displayName;
+    const meta = document.createElement('span'); meta.className = 'meta'; meta.textContent = `${(nb.sections || []).length} section${(nb.sections || []).length === 1 ? '' : 's'}`;
+    const b = document.createElement('button'); b.className = 'act primary'; b.textContent = 'Import';
+    b.onclick = () => importNotebook(nb).catch(e => say('Import stopped: ' + e.message, true));
+    row.append(name, meta, b); list.appendChild(row);
+  }
+}
+/* one OneNote page's HTML -> our page: text boxes stacked down, pictures placed */
+async function importNotebook(nb) {
+  const prog = document.getElementById('onProgress');
+  const sections = nb.sections && nb.sections.length ? nb.sections : await graphAll(`/me/onenote/notebooks/${nb.id}/sections`);
+  let done = 0, total = 0, made = 0;
+  const jobs = [];
+  for (const sec of sections) {
+    const pgs = await graphAll(`/me/onenote/sections/${sec.id}/pages?$select=id,title,createdDateTime,lastModifiedDateTime&$top=100`);
+    total += pgs.length; for (const pg of pgs) jobs.push({sec, pg});
+  }
+  for (const {sec, pg} of jobs) {
+    prog.textContent = `Importing ${++done}/${total}: ${pg.title || 'Untitled'}`;
+    try {
+      const html = await (await graph(`/me/onenote/pages/${pg.id}/content?includeIDs=true`, true)).text();
+      const rec = await onenotePageToRecord(html, nb.displayName, sec.displayName, pg);
+      sheets.push(rec); await store.put(rec); made++;
+    } catch (e) { console.warn('page skipped', pg.title, e); }
+  }
+  prog.textContent = `Imported ${made} of ${total} pages from "${nb.displayName}".`;
+  const first = sheets.filter(s => s.notebook === nb.displayName).sort((a, b) => b.updated - a.updated)[0];
+  if (first) await openPage(first);
+  say(`Imported ${made} pages from OneNote.`);
+}
+async function onenotePageToRecord(html, notebook, section, pg) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const rec = {id: uid(), notebook, section, title: pg.title || doc.title || 'Untitled page', topic: '', created: Date.parse(pg.createdDateTime) || Date.now(),
+               strokes: [], texts: [], aiMarks: [], aiLines: [], chat: [], pdf: null, pics: [], pan: {x: 0, y: 0}, zoom: 1, updated: Date.parse(pg.lastModifiedDateTime) || Date.now()};
+  let y = 40; const x = 60;
+  const push = (text, size, bold) => { const t = text.replace(/\s+/g, ' ').trim(); if (!t) return; rec.texts.push({x, y, text: t, size, color: '#2e2c28', bold: !!bold}); y += size * 1.3 * Math.max(1, Math.ceil(t.length / 90)) + 10; };
+  const walk = async node => {
+    for (const el of node.children) {
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'img') {
+        const src = el.getAttribute('data-fullres-src') || el.getAttribute('src');
+        if (src && src.startsWith('http')) {
+          try {
+            const blob = await (await graph(src, true)).blob(), bytes = await blob.arrayBuffer(), img = await createImageBitmap(blob);
+            const k = Math.min(1, 520 / img.width); rec.pics.push({bytes, x, y, w: img.width * k, h: img.height * k}); y += img.height * k + 16;
+          } catch (e) { push('[picture could not be imported]', 13); }
+        }
+      } else if (/^h[1-6]$/.test(tag)) push(el.textContent, tag === 'h1' ? 26 : tag === 'h2' ? 22 : 19, true);
+      else if (tag === 'p' || tag === 'li' || tag === 'span' && !el.children.length) push((tag === 'li' ? '• ' : '') + el.textContent, 17);
+      else if (tag === 'table') { for (const tr of el.querySelectorAll('tr')) push([...tr.children].map(td => td.textContent.trim()).join('   |   '), 15); y += 6; }
+      else if (tag === 'ol' || tag === 'ul' || tag === 'div' || tag === 'body' || tag === 'html' || tag === 'span') await walk(el);
+    }
+  };
+  await walk(doc.body || doc);
+  if (!rec.texts.length && !rec.pics.length) push('(this page had no importable content — ink pages come through only as pictures)', 14);
+  return rec;
+}
+document.getElementById('onenoteBtn').onclick = showOnenote;
+document.getElementById('onClose').onclick = () => onEl.classList.remove('on');
+document.getElementById('msSave').onclick = () => {
+  const v = document.getElementById('msClientIn').value.trim();
+  if (!/^[0-9a-f-]{36}$/i.test(v)) return say('That does not look like an Application (client) ID.', true);
+  try { localStorage.setItem('showwork.msclient', v); } catch {} showOnenote(); say('Saved. Now sign in with Microsoft.');
+};
+document.getElementById('onSignIn').onclick = () => msSignIn().catch(e => say(e.message, true));
+document.getElementById('onSignOut').onclick = () => { msToken = null; try { sessionStorage.removeItem('showwork.mstoken'); } catch {} showOnenote(); };
+
 /* ---- the sidebar ---- */
 const sideEl = document.getElementById('side');
 const nbSel = document.getElementById('nbSel');
@@ -2719,6 +2891,7 @@ redraw = function () { _redraw(); if (document.getElementById('zoomPct')) zoomLa
   if (!sheets.length) await newPage('My Notebook', 'Notes', 'Page 1');
   else await openPage(pickStart());
   if (WIDE()) setSide(true);                         /* OneNote keeps its columns open on a wide screen */
+  if (await msFinishSignIn()) showOnenote();         /* back from Microsoft? open the notebook picker */
 })();
 </script>
 </body>
