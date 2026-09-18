@@ -498,7 +498,10 @@
 
 <div id="selBar">
   <span id="selCount"></span>
-  <button class="act" id="selDelete">Delete</button>
+  <button class="act" id="selCopy" title="Copy (⌘C)">Copy</button>
+  <button class="act" id="selCut" title="Cut (⌘X)">Cut</button>
+  <button class="act" id="selPaste" title="Paste (⌘V)">Paste</button>
+  <button class="act" id="selDelete" title="Delete">Delete</button>
   <button class="act" id="selDone">Done</button>
 </div>
 <div id="exportMenu">
@@ -1077,6 +1080,59 @@ function deleteSelection() {
   record({type: 'delete', sel});
   setSelection(null); dirty();
 }
+/* ============================================================
+   COPY / CUT / PASTE — the lasso's selection, whole. `clip` holds
+   deep copies of whatever was circled (ink, typed text, the tutor's
+   notes and strike-throughs). Paste puts fresh copies back, offset a
+   little (or under the pointer), selected and ready to drag. One undo
+   step per paste. The words in a copy also go to the system clipboard.
+   ============================================================ */
+let clip = null;
+const cloneSel = (sel, dx = 0, dy = 0) => ({
+  strokes: sel.strokes.map(st => ({color: st.color, width: st.width, alpha: st.alpha || 1, ai: !!st.ai, pts: st.pts.map(q => ({x: q.x + dx, y: q.y + dy}))})),
+  texts:   (sel.texts || []).map(t => ({...snapText(t), x: t.x + dx, y: t.y + dy})),
+  marks:   sel.marks.map(m => ({x: m.x + dx, y: m.y + dy, size: m.size, text: m.text, shown: m.text.length})),
+  lines:   sel.lines.map(l => ({x1: l.x1 + dx, y1: l.y1 + dy, x2: l.x2 + dx, y2: l.y2 + dy, shown: 1})),
+});
+function copySelection() {
+  if (!selection) return say('Circle something with Lasso Select first.', true);
+  clip = cloneSel(selection);
+  const words = [...(selection.texts || []).map(t => t.text), ...selection.marks.map(m => m.text)].join('\n');
+  if (words && navigator.clipboard) navigator.clipboard.writeText(words).catch(() => {});
+  const n = clip.strokes.length + clip.texts.length + clip.marks.length + clip.lines.length;
+  say(`Copied ${n} thing${n === 1 ? '' : 's'}.`);
+}
+function cutSelection() { if (!selection) return say('Circle something with Lasso Select first.', true); copySelection(); deleteSelection(); }
+function pasteClip(at) {
+  if (!clip) return false;
+  /* where: under the pointer if given, else a little down-right of the original */
+  let dx = 24, dy = 24;
+  if (at) {
+    let b = null;
+    for (const st of clip.strokes) for (const q of st.pts) b = union(b, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y});
+    for (const t of clip.texts) b = union(b, {minX: t.x, minY: t.y, maxX: t.x, maxY: t.y});
+    for (const m of clip.marks) b = union(b, {minX: m.x, minY: m.y, maxX: m.x, maxY: m.y});
+    for (const l of clip.lines) b = union(b, {minX: l.x1, minY: l.y1, maxX: l.x1, maxY: l.y1});
+    if (b) { dx = at.x - b.minX; dy = at.y - b.minY; }
+  }
+  const sel = cloneSel(clip, dx, dy);
+  strokes.push(...sel.strokes); texts.push(...sel.texts); aiMarks.push(...sel.marks); aiLines.push(...sel.lines);
+  record({type: 'insert', sel});
+  clip = cloneSel(sel);                           /* paste again -> steps further down-right */
+  setTool('select'); setSelection(sel); dirty();
+  return true;
+}
+document.getElementById('selCopy').onclick = copySelection;
+document.getElementById('selCut').onclick = cutSelection;
+document.getElementById('selPaste').onclick = () => pasteClip() || say('Nothing copied yet.', true);
+addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA/.test(document.activeElement.tagName) || !(e.metaKey || e.ctrlKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'c' && selection) { e.preventDefault(); copySelection(); }
+  else if (k === 'x' && selection) { e.preventDefault(); cutSelection(); }
+  else if (k === 'v') { if (pasteClip()) e.preventDefault(); else document.getElementById('pasteBtn').onclick(); }
+  else if (k === 'z') { e.preventDefault(); document.getElementById(e.shiftKey ? 'redo' : 'undo').onclick(); }
+});
 document.getElementById('selDelete').onclick = deleteSelection;
 document.getElementById('selDone').onclick = () => setSelection(null);
 addEventListener('keydown', e => {
@@ -1264,6 +1320,11 @@ function apply(a, dir) {
   const remove = (list, items) => { for (const it of items) { const i = list.indexOf(it); if (i >= 0) list.splice(i, 1); } };
   if (a.type === 'add')    { dir > 0 ? strokes.push(a.stroke) : remove(strokes, [a.stroke]); }
   if (a.type === 'erase')  { dir > 0 ? remove(strokes, a.strokes) : strokes.push(...a.strokes); }
+  if (a.type === 'insert') {                      /* a paste: forwards adds, backwards removes */
+    const tx = a.sel.texts || [];
+    if (dir > 0) { strokes.push(...a.sel.strokes); aiMarks.push(...a.sel.marks); aiLines.push(...a.sel.lines); texts.push(...tx); }
+    else { remove(strokes, a.sel.strokes); remove(aiMarks, a.sel.marks); remove(aiLines, a.sel.lines); remove(texts, tx); }
+  }
   if (a.type === 'delete') {
     const tx = a.sel.texts || [];
     if (dir > 0) { remove(strokes, a.sel.strokes); remove(aiMarks, a.sel.marks); remove(aiLines, a.sel.lines); remove(texts, tx); }
@@ -2498,6 +2559,7 @@ function newTextAt(screen, text, extra = {}) {
   texts.push(t); record({type: 'text', item: t, before: null, after: snapText(t)}); redraw(); dirty(); return t;
 }
 document.getElementById('pasteBtn').onclick = async () => {
+  if (pasteClip()) return;                        /* something circled and copied: paste that */
   try { const txt = (await navigator.clipboard.readText()).trim(); if (!txt) return say('Nothing to paste.', true); newTextAt(viewCenter(), txt); }
   catch { say('This browser will not share the clipboard — long-press and paste into a text box instead.', true); }
 };
