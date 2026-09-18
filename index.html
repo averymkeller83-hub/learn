@@ -1103,7 +1103,7 @@ cv.addEventListener('pointerdown', e => {
      (button 5 / buttons bit 32 — Surface, Wacom). Apple Pencil has neither,
      which is why the toggle exists. */
   if (tool === 'eraser' || e.button === 5 || (e.buttons & 32)) {
-    erasing = [];
+    erasing = {strokes: [], marks: [], lines: []};
     eraseAt(pt(e));
     return;
   }
@@ -1216,7 +1216,9 @@ function done(e) {
     return redraw();
   }
   if (erasing) {                                   /* one drag = one undo step */
-    if (erasing.length) { record({type: 'erase', strokes: erasing}); dirty(); }
+    if (erasing.strokes.length + erasing.marks.length + erasing.lines.length) {
+      record({type: 'erase', sel: erasing}); dirty();
+    }
     erasing = null;
     return redraw();
   }
@@ -1240,17 +1242,44 @@ cv.addEventListener('pointercancel', done);
    of a stroke and the whole stroke goes. Whole strokes, not pixels,
    because strokes[] is the memory — a pixel eraser would leave the
    picture and the list disagreeing.
+   It rubs out the tutor's work too: once a correction has been read,
+   the page is yours again, and reaching for Undo to clear someone
+   else's marks is the wrong instinct to teach.
    ============================================================ */
 const ERASER_R = 12;
 function eraseAt(p) {
+  const r = ERASER_R / zoom;
   let hit = false;
   for (let i = strokes.length - 1; i >= 0; i--) {
-    if (strokeNear(strokes[i], p, ERASER_R / zoom)) {
-      erasing.push(strokes.splice(i, 1)[0]);
+    if (strokeNear(strokes[i], p, r)) {
+      erasing.strokes.push(strokes.splice(i, 1)[0]);
+      hit = true;
+    }
+  }
+  /* ---- the tutor's work rubs out the same way yours does. Its writing
+     is a text box, not a path, so the test is the box, not the stroke;
+     a whole mark goes at once, like a whole stroke does. */
+  for (let i = aiMarks.length - 1; i >= 0; i--) {
+    if (boxNear(markBox(aiMarks[i]), p, r)) {
+      erasing.marks.push(aiMarks.splice(i, 1)[0]);
+      hit = true;
+    }
+  }
+  for (let i = aiLines.length - 1; i >= 0; i--) {
+    const l = aiLines[i];
+    if (segDist({x: l.x1, y: l.y1}, {x: l.x2, y: l.y2}, p) <= r + 1.5) {
+      erasing.lines.push(aiLines.splice(i, 1)[0]);
       hit = true;
     }
   }
   if (hit) redraw();
+}
+
+/* is point p within r of a box? (0 when p is inside it) */
+function boxNear(b, p, r) {
+  const dx = Math.max(b.minX - p.x, 0, p.x - b.maxX);
+  const dy = Math.max(b.minY - p.y, 0, p.y - b.maxY);
+  return Math.hypot(dx, dy) <= r;
 }
 
 /* is point p within r of any segment of stroke s? */
@@ -1672,7 +1701,10 @@ document.getElementById('redo').onclick = () => {
 function apply(a, dir) {
   const remove = (list, items) => { for (const it of items) { const i = list.indexOf(it); if (i >= 0) list.splice(i, 1); } };
   if (a.type === 'add')    { dir > 0 ? strokes.push(a.stroke) : remove(strokes, [a.stroke]); }
-  if (a.type === 'erase')  { dir > 0 ? remove(strokes, a.strokes) : strokes.push(...a.strokes); }
+  if (a.type === 'erase')  {
+    if (dir > 0) { remove(strokes, a.sel.strokes); remove(aiMarks, a.sel.marks); remove(aiLines, a.sel.lines); }
+    else { strokes.push(...a.sel.strokes); aiMarks.push(...a.sel.marks); aiLines.push(...a.sel.lines); }
+  }
   if (a.type === 'insert') {                      /* a paste: forwards adds, backwards removes */
     const tx = a.sel.texts || [];
     if (dir > 0) { strokes.push(...a.sel.strokes); aiMarks.push(...a.sel.marks); aiLines.push(...a.sel.lines); texts.push(...tx); }
