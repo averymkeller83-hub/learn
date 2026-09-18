@@ -257,6 +257,8 @@
   .msg.ai  { align-self: flex-start; background: var(--side); border-bottom-left-radius: 4px; }
   .msg.ai.board { border-left: 3px solid var(--ai-ink); }
   .msg.thinking { color: var(--muted); font-style: italic; background: transparent; }
+  #lookChip { display: none; align-items: center; gap: 8px; margin: 0 12px 8px; padding: 6px 8px 6px 10px; border: 1px dashed var(--edge); border-radius: 10px; font-size: 13px; color: var(--muted); }
+  #lookChip.on { display: flex; } #lookChip span { flex: 1; }
   #chatform { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--edge); }
   #chatform #micBtn { padding: 9px 11px; }
   #chatform #micBtn[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -733,6 +735,7 @@
 <aside id="chat">
   <header><b>Tutor</b><button class="act icon" id="chatClose" title="Close">×</button></header>
   <div id="msgs"></div>
+  <div id="lookChip"><span>✏️ I'll look at the board when you pause</span><button type="button" class="act" id="lookNow">Look now</button><button type="button" class="act icon" id="lookOff" title="Not this time">×</button></div>
   <form id="chatform">
     <button class="act" id="micBtn" type="button" title="Hold to talk"><svg width="18" height="18" style="vertical-align:-3px"><use href="#f-mic"/></svg></button>
     <input id="chatIn" placeholder="Ask, or hold the mic and talk" autocomplete="off">
@@ -788,6 +791,9 @@ const pages   = [];      /* [{img, x, y, w, h}] — a PDF's pages, stacked, UNDE
 const aiMarks = [];      /* [{x, y, size, text, shown}]    — the AI's writing */
 const aiLines = [];      /* [{x1,y1,x2,y2, shown}]         — the AI's strike-throughs */
 const chat    = [];      /* [{role:'you'|'ai', text, board?}] — this page's conversation */
+let inkMark   = 0;       /* how much was on the page when the tutor last spoke — new ink since = an answer */
+let lookDone  = true;    /* the tutor has already looked (or been told not to) this turn */
+let lookTimer = null;    /* the pause before it looks */
 let pdfBytes  = null;    /* the PDF on this page, so it can be saved and re-rendered */
 
 let pen = PENS[0];
@@ -1262,6 +1268,7 @@ function commitStroke() {
   lastPenAt = performance.now();
   dirty(); coachTick();
   drawing = null; drawingId = null;
+  armLook();
 }
 cv.addEventListener('pointerup', done);
 cv.addEventListener('pointercancel', done);
@@ -1622,6 +1629,7 @@ function commitText() {
     if (fresh || JSON.stringify(before) !== JSON.stringify(after)) record({type: 'text', item: t, before, after});
   }
   redraw(); dirty();
+  armLook();
 }
 document.getElementById('textBtn').onclick = () => setTool(tool === 'text' ? 'pen' : 'text');
 document.getElementById('textBtn2').onclick = () => document.getElementById('textBtn').onclick();
@@ -2504,6 +2512,7 @@ document.getElementById('chatform').addEventListener('submit', async e => {
   const text = chatIn.value.trim();
   if (!text) return;
   chatIn.value = '';
+  clearTimeout(lookTimer); lookTimer = null; lookChip.classList.remove('on');
   chat.push({role: 'you', text});
   renderChat(); dirty();
 
@@ -2531,11 +2540,45 @@ document.getElementById('chatform').addEventListener('submit', async e => {
     const shown = renderBoard(r.board);
     chat.push({role: 'ai', text: (r.say || '').trim() || '…', board: shown});
     const note = checksNote(r); if (note) say(note);
+    inkMark = inkCount(); lookDone = false;              /* the tutor has spoken; what lands next is an answer */
   } catch (err) {
     chat.push({role: 'ai', text: 'I couldn\'t answer that: ' + err.message});
+    inkMark = inkCount(); lookDone = true;               /* nothing to answer */
   }
   renderChat(); dirty();
 });
+
+/* ============================================================
+   LOOK WHEN YOU PAUSE — the tutor asks, you answer ON THE BOARD, and it
+   sees the answer without you typing a word, the way a tutor beside you
+   glances down when your pen stops. Armed only while the chat is open
+   and the last word was the tutor's; fires ONCE per tutor turn, three
+   seconds after the pen lifts, and only if ink landed since it spoke.
+   Typing a reply instead disarms it — the picture rides along anyway.
+   ============================================================ */
+const LOOK_PAUSE_MS = 3000;
+const lookChip = document.getElementById('lookChip');
+function inkCount() { return strokes.length + texts.length; }
+function tutorWaiting() {
+  return chatEl.classList.contains('open') && chat.length > 0 && chat[chat.length - 1].role === 'ai'
+      && !msgsEl.querySelector('.thinking') && !lookDone && inkCount() > inkMark;
+}
+function armLook() {
+  clearTimeout(lookTimer); lookTimer = null;
+  if (!tutorWaiting()) return lookChip.classList.remove('on');
+  lookChip.classList.add('on');
+  lookTimer = setTimeout(lookNow, LOOK_PAUSE_MS);
+}
+function lookNow() {
+  clearTimeout(lookTimer); lookTimer = null; lookChip.classList.remove('on');
+  if (!tutorWaiting()) return;
+  lookDone = true;
+  chatIn.value = '(I wrote it on the board — take a look.)';
+  document.getElementById('chatform').requestSubmit();
+}
+document.getElementById('lookNow').onclick = lookNow;
+document.getElementById('lookOff').onclick = () => { clearTimeout(lookTimer); lookTimer = null; lookDone = true; lookChip.classList.remove('on'); };
+chatIn.addEventListener('input', () => { if (chatIn.value) { clearTimeout(lookTimer); lookTimer = null; lookChip.classList.remove('on'); } });
 
 /* ============================================================
    EXPORT — hand the work to wherever it lives next.
@@ -2728,6 +2771,7 @@ async function openPage(rec, {quiet = false} = {}) {
   texts.length = 0;   texts.push(...(rec.texts || []));
   aiMarks.length = 0; aiMarks.push(...(rec.aiMarks || []));
   aiLines.length = 0; aiLines.push(...(rec.aiLines || []));
+  clearTimeout(lookTimer); lookTimer = null; lookDone = true;   /* what's already here is not an answer */
   chat.length = 0;    chat.push(...(rec.chat || []));
   history.length = 0;
   pages.length = 0; pdfBytes = rec.pdf || null;
