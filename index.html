@@ -142,7 +142,10 @@
   <button class="act" id="eraser" aria-pressed="false" title="Eraser — touch a stroke to remove it">Eraser</button>
   <div class="sep"></div>
   <button class="act" id="undo" title="Undo">Undo</button>
-  <button class="act" id="clear" title="Clear the board">Clear</button>
+  <button class="act" id="clear" title="Clear the ink (keeps the PDF)">Clear</button>
+  <div class="sep"></div>
+  <button class="act" id="pdfbtn" title="Put a PDF on the board to write on">PDF</button>
+  <input type="file" id="pdffile" accept="application/pdf" hidden>
   <div class="sep"></div>
   <button class="act primary" id="check">Check my work</button>
 </div>
@@ -175,6 +178,7 @@ const PENS   = ['#2e2c28', '#1d4ed8', '#166534', '#7c2d12'];  /* no amber here *
 const AI_INK = '#c2410c';                                      /* reserved */
 
 const strokes = [];      /* [{color, width, pts:[{x,y}]}]  — the student's */
+const pages   = [];      /* [{img, x, y, w, h}] — a PDF's pages, stacked, UNDER the ink */
 const aiMarks = [];      /* [{x, y, text, shown}]          — the AI's */
 
 let pen = PENS[0];
@@ -239,6 +243,14 @@ function redraw() {
   ctx.save();
   ctx.translate(pan.x, pan.y);
   ctx.scale(zoom, zoom);
+
+  /* the paper you brought: PDF pages, drawn first so ink sits on top */
+  for (const pg of pages) {
+    ctx.shadowColor = 'rgba(0,0,0,.12)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 3;
+    ctx.fillStyle = '#fff'; ctx.fillRect(pg.x, pg.y, pg.w, pg.h);
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    ctx.drawImage(pg.img, pg.x, pg.y, pg.w, pg.h);
+  }
 
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -538,10 +550,19 @@ document.getElementById('clear').onclick = () => {
    White paper, student ink only.
    ============================================================ */
 function snapshot() {
-  const box = bounds();
+  let box = bounds();
   if (!box) return null;
 
-  const PAD = 40, SCALE = 2;          /* 2x: the model reads crisp ink, not furry ink */
+  /* If the ink is on a PDF page, send the whole page: the printed problem
+     is context the model badly needs. Pages the ink never touched stay out. */
+  const onPages = pages.filter(pg => pg.x < box.maxX && pg.x + pg.w > box.minX &&
+                                     pg.y < box.maxY && pg.y + pg.h > box.minY);
+  for (const pg of onPages) {
+    box = {minX: Math.min(box.minX, pg.x), minY: Math.min(box.minY, pg.y),
+           maxX: Math.max(box.maxX, pg.x + pg.w), maxY: Math.max(box.maxY, pg.y + pg.h)};
+  }
+
+  const PAD = 40, SCALE = onPages.length ? 1.3 : 2;   /* a page is already big; ink alone gets 2x */
   const w = box.maxX - box.minX + PAD * 2;
   const h = box.maxY - box.minY + PAD * 2;
 
@@ -552,6 +573,7 @@ function snapshot() {
   o.fillRect(0, 0, off.width, off.height);
   o.scale(SCALE, SCALE);
   o.translate(PAD - box.minX, PAD - box.minY);
+  for (const pg of onPages) o.drawImage(pg.img, pg.x, pg.y, pg.w, pg.h);
   o.lineCap = 'round'; o.lineJoin = 'round';
 
   for (const s of strokes) {
@@ -664,6 +686,51 @@ function wrap(text, cols) {
     return out.join('\n');
   }).join('\n');
 }
+
+/* ============================================================
+   PDF — put a worksheet on the board and write on it.
+   pdf.js is fetched from cdnjs the first time you ask for it, so the
+   board stays light for everyone who never does. Every page is rendered
+   once to an offscreen canvas and stacked down the board; ink sits on top.
+   ============================================================ */
+const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs';
+const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+let pdfjsLib = null;
+
+document.getElementById('pdfbtn').onclick = () => document.getElementById('pdffile').click();
+document.getElementById('pdffile').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  say('Rendering PDF…');
+  try {
+    if (!pdfjsLib) {
+      pdfjsLib = await import(PDFJS_URL);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    }
+    const doc = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+
+    pages.length = 0;
+    let y = 0;
+    const GAP = 28, RENDER = 2;          /* render at 2x so zooming in stays sharp */
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const vp = page.getViewport({scale: 1});       /* 1 PDF point = 1 board unit */
+      const c = document.createElement('canvas');
+      c.width = vp.width * RENDER; c.height = vp.height * RENDER;
+      await page.render({canvasContext: c.getContext('2d'),
+                         viewport: page.getViewport({scale: RENDER})}).promise;
+      pages.push({img: c, x: 0, y, w: vp.width, h: vp.height});
+      y += vp.height + GAP;
+    }
+    /* bring page 1 into view under the toolbar, life size */
+    zoom = 1; pan = {x: Math.max(24, (innerWidth - pages[0].w) / 2), y: 110};
+    redraw();
+    say(`${doc.numPages} page${doc.numPages > 1 ? 's' : ''} on the board`);
+  } catch (err) {
+    say('Could not open that PDF: ' + err.message, true);
+  }
+  e.target.value = '';                  /* so choosing the same file again re-fires */
+});
 
 /* ---- small helpers: say something, or show we're working ---- */
 const statusEl = document.getElementById('status');
