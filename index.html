@@ -852,6 +852,19 @@ function redraw() {
   /* ---- the paper: colour and pattern, chosen per page ---- */
   drawPaper(ctx);
 
+  /* An empty page used to say nothing at all. One faint line, in the margin
+     below the header, that disappears the moment anything is on the page. */
+  if (!strokes.length && !texts.length && !aiMarks.length && !pages.length && coachStep < 0) {
+    const o = visibleOrigin();
+    ctx.save();
+    ctx.fillStyle = '#b9b3a8';
+    ctx.font = `${Math.round(17 * Math.min(1.4, zoom))}px ui-sans-serif, -apple-system, system-ui, sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.fillText('Write here with a pen, or tap “Teach me…” and name anything you want to learn.',
+                 o.x * zoom + pan.x, o.y * zoom + pan.y);
+    ctx.restore();
+  }
+
   /* ---- everything below moves with the pan and scales with the zoom ---- */
   ctx.save();
   ctx.translate(pan.x, pan.y);
@@ -2969,7 +2982,7 @@ subjectSel.onchange = () => setSubject(subjectSel.value);
 
 /* Teach me…: a fresh page named for the topic, the level saved, and the lesson opened in the chat */
 const teachEl = document.getElementById('teach');
-document.getElementById('teachBtn').onclick = () => { teachEl.classList.toggle('on'); document.getElementById('teachLevel').value = learnerLevel() || 'college'; teachSubject.value = subject(); document.getElementById('teachTopic').focus(); };
+document.getElementById('teachBtn').onclick = () => { teachEl.classList.toggle('on'); coachTick(); document.getElementById('teachLevel').value = learnerLevel() || 'college'; teachSubject.value = subject(); document.getElementById('teachTopic').focus(); };
 document.getElementById('teachTopic').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('teachGo').onclick(); });
 document.getElementById('teachGo').onclick = async () => {
   const what = document.getElementById('teachTopic').value.trim(); if (!what) return say('Type what you want to learn.', true);
@@ -3575,7 +3588,8 @@ redraw = function () { _redraw(); if (document.getElementById('zoomPct')) zoomLa
    been taught something.
    ============================================================ */
 const coach = document.getElementById('coach'), coachText = document.getElementById('coachText'),
-      coachNext = document.getElementById('coachNext'), coachDots = document.getElementById('coachDots');
+      coachNext = document.getElementById('coachNext'), coachDots = document.getElementById('coachDots'),
+      coachSkipBtn = document.getElementById('coachSkip');
 let coachStep = -1, coachWait = null;
 const coachDone = () => { try { return localStorage.getItem('showwork.tour') === 'done'; } catch { return true; } };
 
@@ -3600,8 +3614,9 @@ const TOUR = [
   { text: "That's the idea. You can also just ask — the chat can see this page, and it draws on it when it needs to show you something.",
     target: 'chatBtn' },
 
-  { text: "Last thing, and it's the best one: tap Teach me… and name anything you want to learn. It asks what you already know, puts a plan on the page, and teaches it a step at a time.",
-    target: 'teachBtn' },
+  { text: "Last thing, and it's the best one: tap Teach me… and name anything you want to learn — long division, the Spanish past tense, how a bill becomes law. It asks what you already know, puts a plan on the page, and teaches it a step at a time.",
+    target: 'teachBtn',
+    until: cb => { coachWait = () => { if (teachEl.classList.contains('on')) cb(); }; } },
 ];
 
 function placeCoach(id) {
@@ -3631,6 +3646,7 @@ function showCoach(i) {
   const step = TOUR[i];
   coachText.textContent = step.text;
   coachNext.textContent = i === TOUR.length - 1 ? 'Done' : (step.until ? 'Skip step' : 'Next');
+  coachSkipBtn.textContent = i === 0 ? 'Skip' : 'Skip the rest';
   coachDots.innerHTML = TOUR.map((_, n) => `<i class="${n === i ? 'on' : ''}"></i>`).join('');
   placeCoach(step.target);
   if (step.setup) step.setup();
@@ -3638,6 +3654,8 @@ function showCoach(i) {
 }
 function endCoach() {
   coach.hidden = true; coachStep = -1; coachWait = null;
+  for (let i = strokes.length - 1; i >= 0; i--) if (strokes[i].tour) strokes.splice(i, 1);   /* the grey hint has done its job */
+  redraw();
   for (const el of document.querySelectorAll('.coach-target')) el.classList.remove('coach-target');
   try { localStorage.setItem('showwork.tour', 'done'); } catch {}
 }
