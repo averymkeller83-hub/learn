@@ -252,6 +252,8 @@
   .msg.ai.board { border-left: 3px solid var(--ai-ink); }
   .msg.thinking { color: var(--muted); font-style: italic; background: transparent; }
   #chatform { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--edge); }
+  #chatform #micBtn { padding: 9px 11px; }
+  #chatform #micBtn[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
   #chatform input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 10px; background: var(--paper); color: var(--text); }
 
   /* ============================================================
@@ -319,7 +321,17 @@
   #settings .row { display: flex; gap: 8px; margin-top: 10px; }
   #settings .row button { flex: 1; }
   #settings .opt { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 9px; background: var(--paper); margin-bottom: 4px; }
-  #settings .opt input { margin-top: 3px; } #settings .opt code { background: #efe9f5; padding: 0 4px; border-radius: 4px; }
+  #settings .opt input { margin-top: 3px; }
+  /* ============================================================
+     READING MODE — OpenDyslexic (weighted letter bottoms, so characters
+     can't flip), wider letter/word/line spacing, a warmer page. It changes
+     the tutor's handwriting font too: everything on screen has to be
+     readable, not just the chrome.
+     ============================================================ */
+  body.reading { font-family: 'OpenDyslexic', 'Atkinson Hyperlegible', ui-sans-serif, system-ui, sans-serif;
+                 letter-spacing: .035em; word-spacing: .12em; line-height: 1.7; }
+  body.reading .msg, body.reading #panel, body.reading #teach, body.reading #sources, body.reading #settings,
+  body.reading #side, body.reading #coach { letter-spacing: .04em; line-height: 1.75; } #settings .opt code { background: #efe9f5; padding: 0 4px; border-radius: 4px; }
 
   /* ============================================================
      THE WALK-THROUGH — four pointer bubbles, each asking for one real
@@ -352,6 +364,7 @@
 </head>
 <body>
 
+<link id="dyslexicFont" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/opendyslexic/index.css" disabled>
 <canvas id="board"></canvas>
 
 <!-- Icons: Fluent UI System Icons (Microsoft, MIT licence) - the set OneNote itself uses -->
@@ -420,6 +433,8 @@
   <symbol id="f-hat_graduation" viewBox="0 0 24 24"><path d="M9.9 3.7a3.9 3.9 0 0 1 4.2 0l8.05 5.17a.75.75 0 0 1 .01 1.26L19 12.19v5.56q0 .25-.15.45l-.01.02-.11.13q-.11.14-.32.33c-.28.27-.7.62-1.25.96A9.7 9.7 0 0 1 12 21a9.7 9.7 0 0 1-5.16-1.36 7 7 0 0 1-1.69-1.44 1 1 0 0 1-.15-.45V12.2l-2-1.3v5.36a.75.75 0 1 1-1.5 0V9.5q.02-.42.36-.64zm4.22 11.68a3.9 3.9 0 0 1-4.24 0l-3.38-2.2v4.29l.13.13q.31.32 1 .76A8 8 0 0 0 12 19.5a8 8 0 0 0 4.37-1.14 6 6 0 0 0 1.13-.89v-4.3zm-.84-10.42c-.78-.5-1.78-.5-2.56 0L3.63 9.51l7.07 4.62c.79.51 1.81.51 2.6 0l7.07-4.62z"/></symbol>
   <symbol id="f-notepad" viewBox="0 0 24 24"><path d="M16.25 2c.41 0 .75.34.75.75V4h.75C18.99 4 20 5 20 6.25v10.44c0 .4-.16.78-.44 1.06l-3.81 3.81a1.5 1.5 0 0 1-1.06.44H6.25C5.01 22 4 21 4 19.75V6.25C4 5.01 5 4 6.25 4H7V2.75a.75.75 0 0 1 1.5 0V4h2.75V2.75a.75.75 0 0 1 1.5 0V4h2.75V2.75c0-.41.34-.75.75-.75m-10 3.5a.75.75 0 0 0-.75.75v13.5c0 .41.34.75.75.75H14v-2.25c0-1.24 1-2.25 2.25-2.25h2.25V6.25a.75.75 0 0 0-.75-.75zm10 12a.75.75 0 0 0-.75.75v1.44l2.19-2.19zM11.33 16a.75.75 0 0 1 0 1.5H8.25a.75.75 0 0 1 0-1.5h3.08m4.42-4a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1 0-1.5zm0-4a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1 0-1.5z"/></symbol>
   <symbol id="f-convert" viewBox="0 0 24 24"><path d="M16.51 3c.31 0 .6.2.7.5L22.7 19a.75.75 0 0 1-1.42.5l-1.42-4h-7.11l-1.56 4.02a.75.75 0 1 1-1.4-.54l6-15.5c.11-.3.4-.48.71-.48m-.04 2.9L13.34 14h6zM5.5 10.5l.29.01c1.96.1 3.12 1.23 3.2 3.05l.01.2v5.5c0 .38-.28.7-.65.74l-.1.01a.75.75 0 0 1-.74-.65l-.01-.1v-.1a5.6 5.6 0 0 1-2.75.85 3.13 3.13 0 0 1-3.25-3.25c0-1.72 1.19-3 3.16-3.24a8 8 0 0 1 2.84.2c-.01-1.1-.56-1.65-1.79-1.71q-1.44-.06-2.03.36a.75.75 0 1 1-.86-1.22 4.5 4.5 0 0 1 2.68-.65m2 4.82-.3-.09q-1.22-.33-2.36-.19C3.61 15.2 3 15.84 3 16.8c0 1.1.71 1.75 1.75 1.75q1.02 0 2.5-.97l.25-.17z"/></symbol>
+  <symbol id="f-camera" viewBox="0 0 24 24"><path d="M13.92 2.5c.8 0 1.54.43 1.94 1.11l.82 1.4h2.07C20.55 5 22 6.45 22 8.24v9.5c0 1.8-1.46 3.25-3.25 3.25H5.25A3.25 3.25 0 0 1 2 17.75v-9.5C2 6.45 3.46 5 5.25 5h2.08l.88-1.42a2.3 2.3 0 0 1 1.91-1.08zm0 1.5h-3.8q-.34 0-.57.27l-.07.1-1.1 1.77a.8.8 0 0 1-.63.36h-2.5c-.97 0-1.75.78-1.75 1.75v9.5c0 .97.78 1.75 1.75 1.75h13.5c.97 0 1.75-.78 1.75-1.75v-9.5c0-.97-.78-1.75-1.75-1.75h-2.5a.8.8 0 0 1-.65-.37l-1.03-1.76a.8.8 0 0 0-.65-.37M12 8a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9m0 1.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/></symbol>
+  <symbol id="f-accessibility" viewBox="0 0 24 24"><path d="M10.5 5c0 .64.4 1.19.97 1.4q.53.14 1.06 0A1.5 1.5 0 1 0 10.5 5m-1.47.4L9 5a3 3 0 1 1 5.97.4l2.88-1.22a2.27 2.27 0 0 1 2.96 1.18 2.24 2.24 0 0 1-1.18 2.96L16 9.86v3.71l1.88 5.45a2.25 2.25 0 1 1-4.26 1.46L12 15.78l-1.62 4.7a2.25 2.25 0 1 1-4.26-1.46L8 13.56v-3.7L4.37 8.32a2.24 2.24 0 0 1-1.18-2.96 2.27 2.27 0 0 1 2.96-1.18zm2 2.44q-.26-.07-.5-.17L5.56 5.56a.77.77 0 0 0-1 .4c-.16.38.02.81.4.98l3.78 1.6c.46.2.76.65.76 1.15v3.91q0 .22-.07.4l-1.89 5.5a.75.75 0 1 0 1.42.5l2.1-6.13a.99.99 0 0 1 1.87 0l2.11 6.12a.75.75 0 1 0 1.42-.48l-1.89-5.49a1 1 0 0 1-.07-.4V9.69c0-.5.3-.95.76-1.15l3.78-1.6c.39-.17.56-.6.4-.98a.77.77 0 0 0-1-.4l-4.97 2.1q-.24.11-.5.18a3 3 0 0 1-1.95 0"/></symbol>
 </svg>
 
 <div id="ribbon">
@@ -480,6 +495,8 @@
     <div class="group">
       <button class="rbtn" id="textBtn" aria-pressed="false" title="Text"><svg><use href="#f-textbox"/></svg><span>Text</span></button>
       <button class="rbtn" id="tableBtn"  title="Table"><svg><use href="#f-table"/></svg><span>Table</span></button>
+      <button class="rbtn" id="camBtn" title="Camera — photograph a worksheet or textbook page onto this page"><svg><use href="#f-camera"/></svg><span>Camera</span></button>
+      <input type="file" id="camfile" accept="image/*" capture="environment" hidden>
       <button class="rbtn" id="picBtn"  title="Picture"><svg><use href="#f-image"/></svg><span>Picture</span></button>
       <input type="file" id="picfile" accept="image/*" hidden>
       <button class="rbtn" id="pdfbtn"  title="PDF"><svg><use href="#f-document_pdf"/></svg><span>PDF</span></button>
@@ -604,6 +621,7 @@
 
 <div id="settings">
   <h2>Settings</h2>
+  <label class="opt"><input type="checkbox" id="readingOpt"> <span><b>Reading mode</b> — a typeface made for dyslexia, wider letter and line spacing, a warmer page. Changes every word on screen, including the tutor's handwriting.</span></label>
   <label class="opt"><input type="checkbox" id="calcOpt" checked> <span><b>Calculator</b> — typing <code>3*(4+5) =</code> in a text box fills in the answer, and the tutor may do arithmetic. Turn it off to make the student do every number.</span></label>
   <h2 style="margin-top:14px">Your own Gemini key</h2>
   <p>Anyone with a Google account gets a free key in one tap at
@@ -669,7 +687,8 @@
   <header><b>Tutor</b><button class="act icon" id="chatClose" title="Close">×</button></header>
   <div id="msgs"></div>
   <form id="chatform">
-    <input id="chatIn" placeholder="Ask, or say 'show me' / 'give me a problem'" autocomplete="off">
+    <button class="act" id="micBtn" type="button" title="Hold to talk"><svg width="18" height="18" style="vertical-align:-3px"><use href="#f-mic"/></svg></button>
+    <input id="chatIn" placeholder="Ask, or hold the mic and talk" autocomplete="off">
     <button class="act primary" type="submit">Send</button>
   </form>
 </aside>
@@ -1380,7 +1399,9 @@ try { showTab(localStorage.getItem('showwork.tab') || 'home'); } catch { showTab
    snapshot the tutor sees, in exports, and the lasso can move it.
    ============================================================ */
 const textFont = t => { const n = typeof t === 'number'; const size = n ? t : t.size;
-  return `${!n && t.italic ? 'italic ' : ''}${!n && t.bold ? 'bold ' : ''}${size}px ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif`; };
+  const family = reading() ? `'OpenDyslexic', 'Atkinson Hyperlegible', ui-sans-serif, sans-serif`
+                           : `ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif`;
+  return `${!n && t.italic ? 'italic ' : ''}${!n && t.bold ? 'bold ' : ''}${size}px ${family}`; };
 const textEdit = document.getElementById('textEdit');
 let editing = null;
 
@@ -1442,6 +1463,23 @@ function calcHere() {
   textEdit.setRangeText((line.endsWith(' ') ? '' : ' ') + shown, pos, pos, 'end');
   textEdit.dispatchEvent(new Event('input'));
 }
+/* Reading mode: the font sheet downloads only when someone turns it on */
+const reading = () => { try { return localStorage.getItem('showwork.reading') === 'on'; } catch { return false; } };
+const readingOpt = document.getElementById('readingOpt');
+function applyReading() {
+  const on = reading();
+  document.body.classList.toggle('reading', on);
+  if (on) document.getElementById('dyslexicFont').removeAttribute('disabled');
+  readingOpt.checked = on;
+  if (on && paper.color === '#fbfaf7') setPaper({color: '#fff8e1'});   /* a warmer page, once */
+  redraw();
+}
+readingOpt.onchange = () => {
+  try { localStorage.setItem('showwork.reading', readingOpt.checked ? 'on' : 'off'); } catch {}
+  applyReading();
+  say(readingOpt.checked ? 'Reading mode on.' : 'Reading mode off.');
+};
+
 const calcOpt = document.getElementById('calcOpt');
 calcOpt.checked = calcOn();
 calcOpt.onchange = () => { try { localStorage.setItem('showwork.calc', calcOpt.checked ? 'on' : 'off'); } catch {} say(calcOpt.checked ? 'Calculator on.' : 'Calculator off — the tutor will make you do the numbers.'); };
@@ -1903,7 +1941,11 @@ function keyState() {
 /* ============================================================
    THE AI'S INK — strike-throughs and writing, at the student's size
    ============================================================ */
-const aiFont = size => `${size}px "Bradley Hand", "Segoe Script", "Comic Sans MS", cursive`;
+/* the tutor's handwriting — plainer and wider in reading mode, because a
+   cursive font is exactly what a dyslexic reader does not need */
+const aiFont = size => reading()
+  ? `${size}px 'OpenDyslexic', 'Atkinson Hyperlegible', ui-sans-serif, sans-serif`
+  : `${size}px "Bradley Hand", "Segoe Script", "Comic Sans MS", cursive`;
 
 /* cross out the wrong characters where they sit. The model saw the
    SNAPSHOT, so its box is in snapshot pixels (as thousandths). Undo the
@@ -3110,6 +3152,35 @@ dictateBtn.onclick = () => {
   recog.start(); dictateBtn.setAttribute('aria-pressed', true); say('Listening… tap Dictate again to stop.');
 };
 
+/* ============================================================
+   PUSH TO TALK — hold the mic, speak, let go and it sends. Nothing
+   listens on its own: the microphone starts on pointerdown and stops on
+   pointerup, which is the only way it should work in a shared room.
+   ============================================================ */
+const micBtn = document.getElementById('micBtn');
+let ptt = null;
+function pttStart(e) {
+  e.preventDefault();
+  if (!SR) return say('This browser has no speech recognition — type instead.', true);
+  if (ptt) return;
+  ptt = new SR(); ptt.continuous = true; ptt.interimResults = true; ptt.lang = navigator.language || 'en-US';
+  const before = chatIn.value ? chatIn.value.trim() + ' ' : '';
+  ptt.onresult = ev => { let all = ''; for (let i = 0; i < ev.results.length; i++) all += ev.results[i][0].transcript; chatIn.value = before + all.trim(); };
+  ptt.onerror = er => { say(er.error === 'not-allowed' ? 'Microphone blocked — allow it in the browser to talk.' : 'Mic: ' + er.error, true); pttStop(); };
+  try { ptt.start(); } catch { ptt = null; return; }
+  micBtn.setAttribute('aria-pressed', 'true'); say('Listening…');
+}
+function pttStop(send) {
+  if (!ptt) return;
+  try { ptt.stop(); } catch {}
+  ptt = null; micBtn.setAttribute('aria-pressed', 'false'); say('');
+  if (send && chatIn.value.trim()) setTimeout(() => document.getElementById('chatform').requestSubmit(), 250);
+}
+micBtn.addEventListener('pointerdown', pttStart);
+micBtn.addEventListener('pointerup', () => pttStop(true));
+micBtn.addEventListener('pointerleave', () => pttStop(true));
+micBtn.addEventListener('pointercancel', () => pttStop(false));
+
 /* Read aloud: everything typed and everything the tutor wrote, in page order */
 const readBtn = document.getElementById('readBtn');
 readBtn.onclick = () => {
@@ -3129,8 +3200,14 @@ document.getElementById('tableBtn').onclick = () => {
   strokes.push(...made); record({type: 'group', actions: made.map(st => ({type: 'add', stroke: st}))}); redraw(); dirty();
   say('Table drawn — use Insert › Text to type in the cells.');
 };
+/* Camera and Picture share one handler; only the input differs — `capture`
+   opens the camera straight away on a phone or tablet. Photographing a
+   worksheet is how a student with no printer, and no pen, gets started. */
 document.getElementById('picBtn').onclick = () => document.getElementById('picfile').click();
-document.getElementById('picfile').addEventListener('change', async e => {
+document.getElementById('camBtn').onclick = () => document.getElementById('camfile').click();
+document.getElementById('camfile').addEventListener('change', e => placePicture(e));
+document.getElementById('picfile').addEventListener('change', e => placePicture(e));
+async function placePicture(e) {
   const file = e.target.files[0]; if (!file) return;
   try {
     const bytes = await file.arrayBuffer(), img = await createImageBitmap(new Blob([bytes]));
@@ -3139,7 +3216,7 @@ document.getElementById('picfile').addEventListener('change', async e => {
     pics.push(q); pages.push({img, x: q.x, y: q.y, w: q.w, h: q.h, pic: true}); redraw(); dirty(); say('Picture placed.');
   } catch (err) { say('Could not open that picture: ' + err.message, true); }
   e.target.value = '';
-});
+}
 document.getElementById('linkBtn').onclick = () => { setTool('text'); editText({...newTextAt(viewCenter(), 'https://', {color: '#1d4ed8', underline: true}), fresh: false}); };
 document.getElementById('mathBtn').onclick = () => { setTool('text'); editText({...newTextAt(viewCenter(), '', {size: 22}), fresh: true}); say('Type math as text: sqrt(x), x^2, (a/b). Insert › Symbol has ∫ ∑ π and friends.'); };
 document.getElementById('dateBtn').onclick = () => newTextAt(viewCenter(), new Date().toLocaleString([], {weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit'}));
@@ -3322,6 +3399,7 @@ function coachTick() { if (coachWait) coachWait(); }
   if (WIDE()) setSide(true);                         /* OneNote keeps its columns open on a wide screen */
   if (await msFinishSignIn()) showOnenote();         /* back from Microsoft? open the notebook picker */
   try { fillSubjects(); } catch {}                   /* prompts may have arrived before the page was wired */
+  applyReading();
   if (!coachDone()) { showTab('home'); setTimeout(() => showCoach(0), 500); }   /* a stranger's first minute */
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});   /* installable; shell opens offline */
 })();
