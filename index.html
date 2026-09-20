@@ -2255,17 +2255,28 @@ function aiBottom() {
 /* the AI's answer, appearing the way a person writes it: below the work
    (or below its own last note), paced by the clock at ~45 characters a
    second, in ink that is only ever its own */
-function write(text) {
-  setTimeout(coachTick, 0);
-  const box = bounds();
-  const size = handSize();
+/* ---- where the tutor's column goes. Checking finished work: UNDER it, the way a
+   teacher marks a page. Walking through WITH the student ("beside"): to the RIGHT
+   of their work when there is room, so the space under their problem stays
+   theirs for the next line - otherwise under, as before. ---- */
+function tutorAnchor(beside) {
+  const box = bounds(), size = handSize(), o = visibleOrigin(), vw = visibleWidth();
+  if (beside && box) {
+    const gap = size * 2, x = box.maxX + gap, free = (o.x + vw) - x;
+    if (box.maxX - o.x < vw * 0.55 && free >= 420)
+      return {box, size, x, y: Math.max(box.minY, aiBottom() + size * 0.8), width: Math.min(free, 760)};
+  }
   let width = box ? box.maxX - box.minX : 0;
   for (const m of aiMarks) width = Math.max(width, markBox(m).maxX - m.x);
-  width = Math.min(visibleWidth(), Math.max(640, width));   /* never a skinny column, never under a panel */
-  const o = visibleOrigin();
+  width = Math.min(vw, Math.max(640, width));               /* never a skinny column, never under a panel */
+  return {box, size, x: box ? box.minX : o.x, y: Math.max(box ? box.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8), width};
+}
+
+function write(text, beside = false) {
+  setTimeout(coachTick, 0);
+  const {size, x, y, width} = tutorAnchor(beside);
   const mark = {
-    x: box ? box.minX : o.x,
-    y: Math.max(box ? box.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8),
+    x, y,
     size,
     text: wrap(text, width, size),
     shown: 0,
@@ -2289,17 +2300,16 @@ function write(text) {
    tutor's colour; its strokes are flagged ai:true so the snapshot
    leaves them out and the lasso can still remove them.
    ============================================================ */
-function renderBoard(board) {
+function renderBoard(board, beside = false) {
   if (!board) return false;
-  if (typeof board === 'string') { if (!board.trim()) return false; write(board.trim()); return true; }
+  if (typeof board === 'string') { if (!board.trim()) return false; write(board.trim(), beside); return true; }
   if (!Array.isArray(board)) return false;
 
-  const size = handSize();
-  let b = bounds(); for (const m of aiMarks) b = union(b, markBox(m));
-  const o = visibleOrigin();
-  const x0 = b ? b.minX : o.x;
-  const W = Math.min(visibleWidth(), Math.max(640, b ? b.maxX - b.minX : 0)), H = Math.min(520, Math.max(240, W * 0.5));
-  let y0 = Math.max(b ? b.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8);   /* top of the current sketch area */
+  const a = tutorAnchor(beside);                 /* same column the writing uses */
+  const size = a.size;
+  const x0 = a.x;
+  const W = a.width, H = Math.min(520, Math.max(240, W * 0.5));
+  let y0 = a.y;                                  /* top of the current sketch area */
   let sketching = false, shown = false;
   const P = xy => ({x: x0 + (Math.max(0, Math.min(100, +xy[0] || 0)) / 100) * W,
                     y: y0 + (Math.max(0, Math.min(100, +xy[1] || 0)) / 100) * H});
@@ -2308,7 +2318,7 @@ function renderBoard(board) {
     if (!it || typeof it !== 'object') continue;
     if (typeof it.write === 'string' && it.write.trim()) {
       if (sketching) { y0 += H + size; sketching = false; }          /* text after a sketch goes under it */
-      write(it.write.trim()); shown = true;
+      write(it.write.trim(), beside); shown = true;
       y0 = Math.max(y0, aiBottom() + size * 0.8);
     } else if (typeof it.draw === 'string' && Array.isArray(it.from) && Array.isArray(it.to)) {
       strokes.push(...aiShape(it.draw, P(it.from), P(it.to))); sketching = shown = true;
@@ -2555,6 +2565,7 @@ function tutorSays(text, open = false) {
   if (!text) return;
   chat.push({role: 'ai', text});
   renderChat(); dirty();
+  inkMark = inkCount(); lookDone = false;              /* after a check too: what they write next is their move */
   if (open && !chatEl.classList.contains('open') && !chatBtn.disabled) chatBtn.onclick();
   if (!chatEl.classList.contains('open')) chatFab.classList.add('unread');   /* it spoke while the card was closed */
 }
@@ -2606,7 +2617,7 @@ document.getElementById('chatform').addEventListener('submit', async e => {
       if (o) { r.say = String(o.say || ''); r.board = o.board ?? r.board; }
       else r.say = r.say.replace(/^[\s\S]*?"say"\s*:\s*"/, '').replace(/",?[\s\S]*$/, '') || 'Sorry — say that again?';
     }
-    const shown = renderBoard(r.board);
+    const shown = renderBoard(r.board, true);        /* beside their work: the space under it is theirs */
     chat.push({role: 'ai', text: (r.say || '').trim() || '…', board: shown});
     const note = checksNote(r); if (note) say(note);
     inkMark = inkCount(); lookDone = false;              /* the tutor has spoken; what lands next is an answer */
@@ -3591,7 +3602,7 @@ document.getElementById('tagQ').onclick         = () => fmt(t => prefixLines(t, 
 /* the width of the page you can see, in board units: minus the sidebar and the chat panel */
 function visibleWidth() {
   const left = sideEl.classList.contains('open') && WIDE() ? 470 : 0;
-  const right = chatEl.classList.contains('open') && innerWidth > 900 ? Math.min(360, innerWidth) : 0;
+  const right = chatEl.classList.contains('open') && innerWidth > 900 ? Math.min(404, innerWidth) : 0;
   return Math.max(320, innerWidth - left - right - 80) / zoom;
 }
 
