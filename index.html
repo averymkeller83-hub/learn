@@ -2128,7 +2128,19 @@ async function runCheck() {
          answer, the first step for a blank - never the rest of the problem, whatever came back */
       const fix = String(v.corrected_line || '').trim();
       const lines = wrong ? (fix ? [fix] : steps.slice(0, 1)) : steps.slice(0, 1);
-      if (lines.length) write(lines.join('\n'));
+      /* where the correction goes: on a worksheet, in the margin right of the page at the
+         struck line's height (a teacher's margin note); otherwise under the work as before */
+      const before = {strokes: strokes.length, marks: aiMarks.length};
+      const sheet = wrong && lastStrike && pages.find(pg => !pg.pic && lastStrike.y1 >= pg.y && lastStrike.y1 <= pg.y + pg.h);
+
+      if (lines.length && sheet) {
+        const room = Math.max(260, (visibleOrigin().x + visibleWidth()) - (sheet.x + sheet.w) - handSize());
+        writeAt(lines.join('\n'), sheet.x + sheet.w + handSize() * 0.6, lastStrike.y1 - handSize() * 0.5, room);
+      } else if (lines.length) {
+        write(lines.join('\n'));
+      }
+
+      revealTutorWork(before);                                         /* bring the mark into view */
       tutorSays([v.problem, v.nudge].map(x => String(x || '').trim()).filter(Boolean).join(' ') + (lines.length ? (wrong ? ' I wrote the corrected work on the board.' : ' I put the first step on the board — your turn from there.') : ''), true);
     }
     say(v.all_correct ? 'All correct.' : checksNote(v));
@@ -2451,6 +2463,8 @@ const aiFont = size => reading()
 /* cross out the wrong characters where they sit. The model saw the
    SNAPSHOT, so its box is in snapshot pixels (as thousandths). Undo the
    snapshot's scale and padding to land back on the board. */
+let lastStrike = null;   /* where the tutor last crossed something out */
+
 function strike([ymin, xmin, ymax, xmax]) {
   if (!shot) return;
   const toBoard = (nx, ny) => ({
@@ -2461,6 +2475,7 @@ function strike([ymin, xmin, ymax, xmax]) {
   const a = toBoard(xmin, midY), b = toBoard(xmax, midY);
   const line = {x1: a.x - 6, y1: a.y + 3, x2: b.x + 6, y2: b.y - 3, shown: 0};   /* a slight tilt reads as a hand */
   aiLines.push(line);
+  lastStrike = line;                       /* the check writes its correction beside this */
   const t0 = performance.now(), MS = 350;
   const step = now => {
     line.shown = Math.min(1, (now - t0) / MS);
@@ -2539,6 +2554,25 @@ function tutorAnchor(beside) {
   const y = Math.max(box ? box.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8);
 
   return {box, size, x, y, width};
+}
+
+/* ---- a note at a chosen spot - the margin next to a struck line on a worksheet,
+   the way a teacher writes the fix beside the mistake, not at the bottom of the pile ---- */
+function writeAt(text, x, y, width) {
+  setTimeout(coachTick, 0);
+
+  const size = handSize() * 0.72;
+  const mark = {x, y, size, text: wrap(text, width, size), shown: 0};
+  aiMarks.push(mark);
+
+  /* typed on at the same pace as any other note */
+  const total = mark.text.length, CPS = 45, t0 = performance.now();
+  const step = now => {
+    mark.shown = Math.min(total, Math.floor((now - t0) / 1000 * CPS));
+    redraw();
+    if (mark.shown < total) requestAnimationFrame(step); else dirty();
+  };
+  requestAnimationFrame(step);
 }
 
 function write(text, beside = false) {
