@@ -2721,6 +2721,9 @@ function renderBoard(board, beside = false) {
         if (b.label) aiMarks.push(inkLabel(left + barW + size * 0.6, (top + bot) / 2 - size * 0.45, Math.max(14, size * 0.8), String(b.label).trim()));
       });
 
+      /* the next picture starts under the last bar, not on top of it */
+      y0 += rows.length * rowH + size * 0.6;
+
       sketching = shown = true;
     } else if (Array.isArray(it.timeline) && it.timeline.length) {
 
