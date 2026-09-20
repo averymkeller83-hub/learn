@@ -2419,6 +2419,41 @@ function renderBoard(board, beside = false) {
         if (b.label) aiMarks.push({x: left + barW + size * 0.6, y: (top + bot) / 2 - size * 0.45, size: Math.max(14, size * 0.8), text: String(b.label).trim(), shown: String(b.label).length});
       });
       sketching = shown = true;
+    } else if (Array.isArray(it.timeline) && it.timeline.length) {
+      /* ---- a timeline: one long line, a tick and a label per event, in the order given.
+         History's picture the way bars are math's - the page draws it, so it is
+         always straight, evenly spaced and legible. Labels alternate above/below. ---- */
+      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
+      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+      const ev = it.timeline.filter(e => e && typeof e === 'object').slice(0, 8);
+      const lineY = y0 + size * 2.2, left = x0 + size * 0.5, right = x0 + W - size * 0.5, n = ev.length;
+      strokes.push(straight({x: left, y: lineY}, {x: right, y: lineY}, 3));
+      strokes.push(straight({x: right - 10, y: lineY - 7}, {x: right, y: lineY}, 3), straight({x: right - 10, y: lineY + 7}, {x: right, y: lineY}, 3));
+      ev.forEach((e, i) => {
+        const x = n === 1 ? (left + right) / 2 : left + (right - left) * i / (n - 1), up = i % 2 === 0;
+        strokes.push(straight({x, y: lineY - 9}, {x, y: lineY + 9}, 3));
+        const at = String(e.at || e.when || e.date || '').trim(), label = String(e.label || e.what || '').trim();
+        const fs = Math.max(13, size * 0.62);
+        if (at) aiMarks.push({x: x - fs * at.length * 0.28, y: up ? lineY - fs * 2.5 : lineY + fs * 0.6, size: fs, text: at, shown: at.length});
+        if (label) aiMarks.push({x: x - fs * Math.min(label.length, 18) * 0.26, y: up ? lineY - fs * 1.35 : lineY + fs * 1.75, size: fs, text: wrap(label, fs * 12, fs), shown: label.length + 20});
+      });
+      y0 = lineY + size * 3.6; sketching = shown = true;
+    } else if (it.table && typeof it.table === 'object' && Array.isArray(it.table.rows)) {
+      /* ---- a table: a real grid with a header row - a trace table for code, a conjugation
+         table for a language, atom counts for chemistry - instead of pipes in handwriting. ---- */
+      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
+      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+      const head = Array.isArray(it.table.head) ? it.table.head.map(x => String(x ?? '')) : [];
+      const rows = it.table.rows.filter(Array.isArray).slice(0, 10).map(r => r.map(x => String(x ?? '')));
+      const cols = Math.max(head.length, ...rows.map(r => r.length), 1);
+      const fs = Math.max(13, size * 0.66), rowH = fs * 1.9;
+      const colW = Math.max(fs * 3.2, Math.min((W - size) / cols, fs * 9));
+      const all = head.length ? [head, ...rows] : rows, top = y0 + size * 0.4, left = x0 + size * 0.3;
+      const bottom = top + rowH * all.length, rightX = left + colW * cols;
+      for (let r = 0; r <= all.length; r++) strokes.push(straight({x: left, y: top + r * rowH}, {x: rightX, y: top + r * rowH}, r === 1 && head.length ? 3.2 : 2.2));
+      for (let c = 0; c <= cols; c++) strokes.push(straight({x: left + c * colW, y: top}, {x: left + c * colW, y: bottom}, 2.2));
+      all.forEach((row, r) => row.forEach((cell, c) => { if (cell.trim()) aiMarks.push({x: left + c * colW + fs * 0.5, y: top + r * rowH + fs * 0.45, size: fs, text: cell.slice(0, 22), shown: cell.length}); }));
+      y0 = bottom + size; sketching = shown = true;
     } else if (typeof it.plot === 'string') {
       /* graphs share one set of axes while plots come in a row; the axes take the whole sketch area */
       if (!plotAxes) plotAxes = makeAxes(x0, y0, W, H, it.x, it.y);
