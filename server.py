@@ -140,8 +140,17 @@ def strip_fence(text):
 # brace, or a sentence after the object. Strict parse, then the widest
 # {...} in the text, then None. Raw JSON must never reach the student.
 # ============================================================
+def repair_escapes(t):
+    """A lone backslash - the model writing \\frac despite the rules - is an
+    illegal JSON escape and sinks the whole reply. Make it a literal one."""
+
+    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', t)
+
+
 def loose_json(text):
-    t = strip_fence(text)
+    # ---- strip the fence, mend the backslashes, then try the strict parse ----
+    t = repair_escapes(strip_fence(text))
+
     try:
         return json.loads(t)
     except ValueError:

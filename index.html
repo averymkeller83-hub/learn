@@ -698,6 +698,7 @@
 <div id="settings">
   <h2>Settings</h2>
   <label class="opt"><input type="checkbox" id="readingOpt"> <span><b>Reading mode</b> — a typeface made for dyslexia, wider letter and line spacing, a warmer page. Changes every word on screen, including the tutor's handwriting.</span></label>
+  <label class="opt"><input type="checkbox" id="fingerOpt"> <span><b>Draw with a finger</b> — for a phone with no pen. Off, only a pen writes: fingers pan and zoom, and a resting palm never leaves a mark.</span></label>
   <label class="opt"><input type="checkbox" id="calcOpt" checked> <span><b>Calculator</b> — typing <code>3*(4+5) =</code> in a text box fills in the answer, and the tutor may do arithmetic. Turn it off to make the student do every number.</span></label>
   <h2 style="margin-top:14px">Your own AI</h2>
   <p>Showwork's shared key is Gemini, and it's free — a Google account gets you one in a tap at
@@ -1174,12 +1175,22 @@ cv.addEventListener('pointerdown', e => {
   if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open'); progEl.classList.remove('on');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
-    if ((drawing && penSeen) || (erasing && penSeen) || performance.now() - lastPenAt < PALM_MS) return;   /* a palm, when a pen is in play */
+
+    /* a palm is a big contact patch - a fingertip is not */
+    if (e.width > 45 || e.height > 45) return;
+
+    /* any finger while a pen is writing, or right after it wrote, is a palm */
+    if ((drawing && penSeen) || (erasing && penSeen) || performance.now() - lastPenAt < PALM_MS) return;
 
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
     if (penSeen && touches.size === 1) return;                                  /* also a palm */
     capture(e);
     if (touches.size === 2) {                /* second finger: a pinch begins */
+
+      /* two contact points that close together are one palm, not two fingers */
+      const [ta, tb] = [...touches.values()];
+      if (Math.hypot(ta.x - tb.x, ta.y - tb.y) < 90) { touches.delete(e.pointerId); return; }
+
       if (drawing && !penSeen) {             /* the first finger was writing: keep a real stroke, drop a tap */
         if (drawing.pts.length > 3) commitStroke(); else { drawing = null; drawingId = null; }
         lasso = null; shaping = null; if (erasing) { erasing = null; }
@@ -1192,7 +1203,7 @@ cv.addEventListener('pointerdown', e => {
     } else if (touches.size === 1) {
       /* one finger, no pen ever seen on this page: on a phone the finger IS the pen.
          It writes (or erases, or lassos - whatever tool is up); two fingers pan and zoom. */
-      if (tool === 'pen' || tool === 'eraser' || tool === 'select' || tool === 'shape') {
+      if (fingerOn() && (tool === 'pen' || tool === 'eraser' || tool === 'select' || tool === 'shape')) {
         panFrom = null;
         if (tool === 'eraser') { erasing = {strokes: [], marks: [], lines: []}; eraseAt(pt(e)); return; }
         if (tool === 'select') { setSelection(null); lasso = [pt(e)]; return; }
@@ -1267,8 +1278,8 @@ function newStroke(e) {
 }
 
 cv.addEventListener('pointermove', e => {
-  const fingerInk = e.pointerType === 'touch' && !penSeen && touches.size === 1 && e.pointerId === (drawingId ?? -1) && drawing;
-  const fingerTool = e.pointerType === 'touch' && !penSeen && touches.size === 1 && (lasso || erasing || shaping);
+  const fingerInk = fingerOn() && e.pointerType === 'touch' && !penSeen && touches.size === 1 && e.pointerId === (drawingId ?? -1) && drawing;
+  const fingerTool = fingerOn() && e.pointerType === 'touch' && !penSeen && touches.size === 1 && (lasso || erasing || shaping);
   if (e.pointerType === 'touch' && !fingerInk && !fingerTool) {
     if (!touches.has(e.pointerId)) return;   /* a palm we chose to ignore */
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
@@ -1350,7 +1361,7 @@ cv.addEventListener('pointermove', e => {
 });
 
 function done(e) {
-  if (e.pointerType === 'touch' && !penSeen && (drawing || lasso || erasing || shaping) && (drawingId === null || drawingId === e.pointerId)) {
+  if (fingerOn() && e.pointerType === 'touch' && !penSeen && (drawing || lasso || erasing || shaping) && (drawingId === null || drawingId === e.pointerId)) {
     touches.delete(e.pointerId);            /* the finger that was writing lifts: commit exactly as a pen would */
   } else if (e.pointerType === 'touch') {
     touches.delete(e.pointerId);
@@ -1711,6 +1722,20 @@ textEdit.addEventListener('keydown', e => {
    and the tutor is told to make the student do the numbers.
    ============================================================ */
 const calcOn = () => { try { return localStorage.getItem('showwork.calc') !== 'off'; } catch { return true; } };
+
+/* ---- "Draw with a finger" - off unless the student turns it on in Settings.
+   With it off, only a pen inks; every touch is a palm or a pan. ---- */
+const fingerOn = () => { try { return localStorage.getItem('showwork.finger') === 'on'; } catch { return false; } };
+
+{
+  const fingerOpt = document.getElementById('fingerOpt');
+
+  fingerOpt.checked = fingerOn();
+
+  fingerOpt.onchange = () => {
+    try { localStorage.setItem('showwork.finger', fingerOpt.checked ? 'on' : 'off'); } catch {}
+  };
+}
 function calcHere() {
   if (!calcOn() || !editing) return;
   const v = textEdit.value, pos = textEdit.selectionStart;
@@ -2257,8 +2282,18 @@ function stripFence(text) {                          /* the model likes ```json 
    then the widest {...} in the text, then give up honestly. Raw JSON
    must never reach the chat as if it were the tutor talking.
    ============================================================ */
+/* ---- a lone backslash (the model writing \frac despite the rules) breaks JSON.parse.
+   Turn every backslash that is not a legal JSON escape into a literal one first. ---- */
+function repairEscapes(t) {
+
+  return t.replace(/\\(?!["\\\/bfnrtu])/g, '\\\\');
+}
+
 function looseJson(text) {
-  const t = stripFence(text);
+
+  /* strip a code fence, then mend the backslashes, then try the strict parse */
+  const t = repairEscapes(stripFence(text));
+
   try { return JSON.parse(t); } catch {}
   const a = t.indexOf('{'), b = t.lastIndexOf('}');
   if (a >= 0 && b > a) {
@@ -2367,6 +2402,13 @@ function tutorAnchor(beside) {
   let box = null;
   for (const st of strokes) { if (st.tour || st.ai) continue; for (const q of st.pts) box = union(box, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y}); }
   for (const t of texts) if (t.text.trim()) box = union(box, textBox(t));
+
+  /* a worksheet on the page is their work too - the tutor must write beside it, never on it */
+  for (const pg of pages) {
+    if (pg.pic) continue;
+    box = union(box, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h});
+  }
+
   /* walking alongside, the tutor writes smaller than the student - a margin note, not a
      headline - so a plan and a picture fit on one screen with the student's work */
   const size = beside ? handSize() * 0.72 : handSize(), o = visibleOrigin(), vw = visibleWidth();

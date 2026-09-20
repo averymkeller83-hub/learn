@@ -240,8 +240,15 @@ async function askGemini(env, body) {
 
 // the model's JSON, read the way a person would: strict parse, then the
 // widest {...} in the text, then null. Raw JSON must never reach the student.
+// ---- a lone backslash (the model writing \frac despite the rules) breaks JSON.parse;
+//      make every illegal escape a literal backslash before parsing ----
+function repairEscapes(t) {
+
+  return t.replace(/\\(?!["\\\/bfnrtu])/g, '\\\\');
+}
+
 function looseJson(text) {
-  const t = stripFence(text);
+  const t = repairEscapes(stripFence(text));
   try { return JSON.parse(t); } catch {}
   const a = t.indexOf("{"), b = t.lastIndexOf("}");
   if (a >= 0 && b > a) for (let end = b; end > a; end = t.lastIndexOf("}", end - 1)) {
