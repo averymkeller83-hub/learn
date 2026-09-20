@@ -142,16 +142,44 @@ def strip_fence(text):
 # ============================================================
 def repair_escapes(t):
     """A lone backslash - the model writing \\frac despite the rules - is an
-    illegal JSON escape and sinks the whole reply. Make it a literal one,
-    and treat a LaTeX-looking word the same way (a real \\uXXXX is left alone)."""
+    illegal JSON escape and sinks the whole reply. Walk the text once and make
+    every backslash that is not a real escape a literal one. A LaTeX word
+    (\\frac, \\neq) counts as literal even when its first letter is a legal escape."""
 
-    # ---- not a legal escape -> literal ----
-    out = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', t)
+    out = []
+    i = 0
 
-    # ---- \frac, \neq, \times ... -> literal ----
-    out = re.sub(r'\\(?=[a-zA-Z]{2,})(?!u[0-9a-fA-F]{4})', r'\\\\', out)
+    while i < len(t):
+        ch = t[i]
 
-    return out
+        # ---- ordinary character: copy it ----
+        if ch != "\\":
+            out.append(ch)
+            i += 1
+            continue
+
+        rest = t[i + 1:]
+        nxt = rest[:1]
+
+        # ---- an escaped backslash: keep the pair ----
+        if nxt == "\\":
+            out.append("\\\\")
+            i += 2
+            continue
+
+        # ---- a real escape, unless it starts a LaTeX word ----
+        legal = nxt in '"/bfnrtu'
+        latex_word = re.match(r"[a-zA-Z]{2,}", rest) is not None and re.match(r"u[0-9a-fA-F]{4}", rest) is None
+        if legal and not latex_word:
+            out.append("\\")
+            i += 1
+            continue
+
+        # ---- anything else: a literal backslash ----
+        out.append("\\\\")
+        i += 1
+
+    return "".join(out)
 
 
 def loose_json(text):

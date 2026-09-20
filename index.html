@@ -2286,11 +2286,27 @@ function stripFence(text) {                          /* the model likes ```json 
    Turn every backslash that is not a legal JSON escape into a literal one first. ---- */
 function repairEscapes(t) {
 
-  /* not a legal escape -> literal backslash */
-  let out = t.replace(/\\(?!["\\\/bfnrtu])/g, '\\\\');
+  let out = '';
 
-  /* a LaTeX-looking word (\frac, \neq, \times) -> literal too; a real \uXXXX is left alone */
-  out = out.replace(/\\(?=[a-zA-Z]{2,})(?!u[0-9a-fA-F]{4})/g, '\\\\');
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+
+    /* ordinary character: copy it */
+    if (ch !== '\\') { out += ch; continue; }
+
+    const rest = t.slice(i + 1), next = rest[0] || '';
+
+    /* an escaped backslash: keep the pair, skip its partner */
+    if (next === '\\') { out += '\\\\'; i++; continue; }
+
+    /* a real JSON escape (\n, \", \uXXXX ...) - unless it is the start of a LaTeX word like \frac or \neq */
+    const legal = '"/bfnrtu'.includes(next);
+    const latexWord = /^[a-zA-Z]{2,}/.test(rest) && !/^u[0-9a-fA-F]{4}/.test(rest);
+    if (legal && !latexWord) { out += '\\'; continue; }
+
+    /* anything else: the model meant a literal backslash */
+    out += '\\\\';
+  }
 
   return out;
 }
