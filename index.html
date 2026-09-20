@@ -1055,9 +1055,47 @@ function drawStroke(c, s) {
   c.lineWidth = s.width;
   c.globalAlpha = s.alpha || 1;                 /* the highlighter is see-through */
   c.beginPath();
-  tracePath(c, s.pts);
+  tracePath(c, s.reveal != null && s.reveal < 1 ? partialPts(s.pts, s.reveal) : s.pts);
   c.stroke();
   c.globalAlpha = 1;
+}
+
+/* the first `r` of a stroke's length, ending exactly on the line - so a stroke
+   can be drawn on the way a hand draws it, not popped in */
+function partialPts(pts, r) {
+  if (pts.length < 2) return pts;
+  let total = 0; const seg = [];
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y); seg.push(d); total += d; }
+  let want = total * Math.max(0, Math.min(1, r)), out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    if (want >= seg[i-1]) { out.push(pts[i]); want -= seg[i-1]; continue; }
+    const t = seg[i-1] ? want / seg[i-1] : 0;
+    out.push({x: pts[i-1].x + (pts[i].x - pts[i-1].x) * t, y: pts[i-1].y + (pts[i].y - pts[i-1].y) * t});
+    break;
+  }
+  if (out.length === 1) out.push({x: out[0].x + .01, y: out[0].y});
+  return out;
+}
+
+/* the tutor's new strokes appear in order, each drawn on over a moment, the whole
+   set inside ~1.4s however many there are - the hand the videos showed */
+function animateInk(newStrokes) {
+  const list = newStrokes.filter(st => st && st.ai && st.pts && st.pts.length > 1);
+  if (!list.length) return;
+  const len = st => { let L = 0; for (let i = 1; i < st.pts.length; i++) L += Math.hypot(st.pts[i].x - st.pts[i-1].x, st.pts[i].y - st.pts[i-1].y); return L; };
+  let dur = list.map(st => Math.min(260, Math.max(45, len(st) / 1.1)));
+  const total = dur.reduce((a, b) => a + b, 0), budget = 1400;
+  if (total > budget) dur = dur.map(d => d * budget / total);
+  const starts = []; let acc = 0; for (const d of dur) { starts.push(acc); acc += d; }
+  list.forEach(st => { st.reveal = 0; });
+  const t0 = performance.now();
+  const step = now => {
+    const t = now - t0; let done = true;
+    list.forEach((st, i) => { const r = (t - starts[i]) / dur[i]; st.reveal = Math.max(0, Math.min(1, r)); if (r < 1) done = false; });
+    redraw();
+    if (!done) requestAnimationFrame(step); else { list.forEach(st => { delete st.reveal; }); redraw(); dirty(); }
+  };
+  requestAnimationFrame(step);
 }
 
 /* ============================================================
@@ -1928,8 +1966,10 @@ async function runCheck() {
       const steps = (Array.isArray(v.steps) ? v.steps : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
       /* nothing was wrong -> they didn't attempt it (a "?", a blank): that is "teach me", so
          the board gets the FIRST step only and never the answer, whatever the model sent */
-      const lines = wrong ? [...steps] : steps.slice(0, 1);
-      if (wrong && v.corrected_line && !steps.includes(String(v.corrected_line).trim())) lines.push(String(v.corrected_line).trim());
+      /* one mistake at a time means ONE line on the board: the corrected line for a wrong
+         answer, the first step for a blank - never the rest of the problem, whatever came back */
+      const fix = String(v.corrected_line || '').trim();
+      const lines = wrong ? (fix ? [fix] : steps.slice(0, 1)) : steps.slice(0, 1);
       if (lines.length) write(lines.join('\n'));
       tutorSays([v.problem, v.nudge].map(x => String(x || '').trim()).filter(Boolean).join(' ') + (lines.length ? (wrong ? ' I wrote the corrected work on the board.' : ' I put the first step on the board — your turn from there.') : ''), true);
     }
@@ -2318,6 +2358,7 @@ function renderBoard(board, beside = false) {
   if (typeof board === 'string') { if (!board.trim()) return false; write(board.trim(), beside); return true; }
   if (!Array.isArray(board)) return false;
 
+  const firstNew = strokes.length;               /* everything pushed from here on is drawn on, not popped in */
   const a = tutorAnchor(beside);                 /* same column the writing uses */
   const size = a.size;
   const x0 = a.x;
@@ -2363,6 +2404,15 @@ function renderBoard(board, beside = false) {
         strokes.push(straight({x: left, y: top}, {x: left + barW, y: top}), straight({x: left + barW, y: top}, {x: left + barW, y: bot}),
                      straight({x: left + barW, y: bot}, {x: left, y: bot}), straight({x: left, y: bot}, {x: left, y: top}));
         for (let k = 1; k < parts; k++) strokes.push(straight({x: left + k * cw, y: top}, {x: left + k * cw, y: bot}));
+        /* "cut": the same bar re-divided into finer equal parts, drawn as dashed lines over
+           the original cells - thirds shown as sixths, so 2/3 and 4/6 are visibly the same bar */
+        const cut = Math.round(+b.cut || 0);
+        if (cut > parts && cut <= 48 && cut % parts === 0) {
+          const fw = barW / cut;
+          for (let k = 1; k < cut; k++) if (k % (cut / parts)) {
+            for (let yy = top + 3; yy < bot - 3; yy += 9) strokes.push(straight({x: left + k * fw, y: yy}, {x: left + k * fw, y: Math.min(bot - 3, yy + 5)}, 2.2, 0.9));
+          }
+        }
         if (b.label) aiMarks.push({x: left + barW + size * 0.6, y: (top + bot) / 2 - size * 0.45, size: Math.max(14, size * 0.8), text: String(b.label).trim(), shown: String(b.label).length});
       });
       sketching = shown = true;
@@ -2377,6 +2427,7 @@ function renderBoard(board, beside = false) {
     }
     plotAxes = null;                               /* anything that isn't a plot ends the shared axes */
   }
+  animateInk(strokes.slice(firstNew));
   redraw(); dirty();
   return shown;
 }
