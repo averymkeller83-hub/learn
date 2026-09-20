@@ -949,9 +949,13 @@ function drawSelection(c) {
 function paint(c, {shadows = false, ai = true, pdf = true, revealed = true} = {}) {
   /* the paper you brought: PDF pages, drawn first so ink sits on top */
   if (pdf) for (const pg of pages) {
-    if (shadows) { c.shadowColor = 'rgba(0,0,0,.12)'; c.shadowBlur = 12; c.shadowOffsetY = 3; }
-    c.fillStyle = '#fff'; c.fillRect(pg.x, pg.y, pg.w, pg.h);
-    c.shadowColor = 'transparent'; c.shadowBlur = 0; c.shadowOffsetY = 0;
+    /* a PDF page is paper - white with a shadow. The tutor's SVG diagrams are pictures ON the
+       paper, so they get neither: they sit straight on the page like the rest of its ink. */
+    if (!pg.pic) {
+      if (shadows) { c.shadowColor = 'rgba(0,0,0,.12)'; c.shadowBlur = 12; c.shadowOffsetY = 3; }
+      c.fillStyle = '#fff'; c.fillRect(pg.x, pg.y, pg.w, pg.h);
+      c.shadowColor = 'transparent'; c.shadowBlur = 0; c.shadowOffsetY = 0;
+    }
     c.drawImage(pg.img, pg.x, pg.y, pg.w, pg.h);
   }
 
