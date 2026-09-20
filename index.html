@@ -1919,11 +1919,15 @@ async function runCheck() {
     } else {
       /* The board shows ONLY the work done right: strike the wrong bit where it
          sits, write the corrected lines under it. The WHY goes to the chat. */
-      if (Array.isArray(v.wrong_box) && v.wrong_box.length === 4) strike(v.wrong_box);
+      const wrong = Array.isArray(v.wrong_box) && v.wrong_box.length === 4;
+      if (wrong) strike(v.wrong_box);
       const steps = (Array.isArray(v.steps) ? v.steps : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
-      const lines = [...steps]; if (v.corrected_line && !steps.includes(String(v.corrected_line).trim())) lines.push(String(v.corrected_line).trim());
+      /* nothing was wrong -> they didn't attempt it (a "?", a blank): that is "teach me", so
+         the board gets the FIRST step only and never the answer, whatever the model sent */
+      const lines = wrong ? [...steps] : steps.slice(0, 1);
+      if (wrong && v.corrected_line && !steps.includes(String(v.corrected_line).trim())) lines.push(String(v.corrected_line).trim());
       if (lines.length) write(lines.join('\n'));
-      tutorSays([v.problem, v.nudge].map(x => String(x || '').trim()).filter(Boolean).join(' ') + (lines.length ? ' I wrote the corrected work on the board.' : ''), true);
+      tutorSays([v.problem, v.nudge].map(x => String(x || '').trim()).filter(Boolean).join(' ') + (lines.length ? (wrong ? ' I wrote the corrected work on the board.' : ' I put the first step on the board — your turn from there.') : ''), true);
     }
     say(v.all_correct ? 'All correct.' : checksNote(v));
   } catch (e) { say(e.message, true); }
