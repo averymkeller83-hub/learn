@@ -244,7 +244,13 @@ async function askGemini(env, body) {
 //      make every illegal escape a literal backslash before parsing ----
 function repairEscapes(t) {
 
-  return t.replace(/\\(?!["\\\/bfnrtu])/g, '\\\\');
+  /* not a legal escape -> literal backslash */
+  let out = t.replace(/\\(?!["\\\/bfnrtu])/g, '\\\\');
+
+  /* a LaTeX-looking word (\frac, \neq, \times) -> literal too; a real \uXXXX is left alone */
+  out = out.replace(/\\(?=[a-zA-Z]{2,})(?!u[0-9a-fA-F]{4})/g, '\\\\');
+
+  return out;
 }
 
 function looseJson(text) {

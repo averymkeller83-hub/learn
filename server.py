@@ -142,9 +142,16 @@ def strip_fence(text):
 # ============================================================
 def repair_escapes(t):
     """A lone backslash - the model writing \\frac despite the rules - is an
-    illegal JSON escape and sinks the whole reply. Make it a literal one."""
+    illegal JSON escape and sinks the whole reply. Make it a literal one,
+    and treat a LaTeX-looking word the same way (a real \\uXXXX is left alone)."""
 
-    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', t)
+    # ---- not a legal escape -> literal ----
+    out = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', t)
+
+    # ---- \frac, \neq, \times ... -> literal ----
+    out = re.sub(r'\\(?=[a-zA-Z]{2,})(?!u[0-9a-fA-F]{4})', r'\\\\', out)
+
+    return out
 
 
 def loose_json(text):
