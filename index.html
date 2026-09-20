@@ -246,13 +246,30 @@
      avatar is a dot of its own ink. Board messages keep the amber edge and
      get a little "on the board" pill instead of a bare line of text. ---- */
   #chat {
-    position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 100vw); z-index: 30;
-    background: var(--side); border-left: 1px solid var(--edge); box-shadow: -10px 0 28px rgba(0,0,0,.05);
-    transform: translateX(100%); transition: transform .18s ease;
+    position: fixed; right: 24px; bottom: 96px; z-index: 30;
+    width: min(380px, calc(100vw - 32px)); height: min(640px, calc(100vh - 128px));
+    background: var(--side); border: 1px solid var(--edge); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.06);
+    transform: translateY(12px) scale(.96); transform-origin: 100% 100%; opacity: 0; pointer-events: none;
+    transition: transform .18s ease, opacity .18s ease;
     display: flex; flex-direction: column;
     -webkit-user-select: text; user-select: text;
   }
-  #chat.open { transform: none; }
+  #chat.open { transform: none; opacity: 1; pointer-events: auto; }
+  @media (max-width: 620px) { #chat { right: 0; bottom: 0; width: 100vw; height: 100dvh; border-radius: 0; border: 0; } }
+  /* the launcher: the tutor's own ink, bottom-right; × while the card is open,
+     a purple dot when the tutor spoke while it was closed */
+  #chatFab {
+    position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; z-index: 31; border: 0; border-radius: 50%;
+    background: var(--ai-ink); color: #fff; cursor: pointer; display: grid; place-items: center;
+    box-shadow: 0 10px 28px rgba(194,65,12,.35), 0 2px 6px rgba(0,0,0,.12); transition: transform .15s ease;
+  }
+  #chatFab:hover { transform: translateY(-1px); }
+  #chatFab svg { width: 26px; height: 26px; }
+  #chatFab .x { display: none; font-size: 30px; line-height: 1; margin-top: -3px; }
+  #chatFab.open svg { display: none; } #chatFab.open .x { display: block; }
+  #chatFab .dot { position: absolute; top: 3px; right: 3px; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; display: none; }
+  #chatFab.unread .dot { display: block; }
   #chat header { padding: 12px 12px 10px 14px; border-bottom: 1px solid rgba(0,0,0,.06); display: flex; justify-content: space-between; align-items: center; }
   #chat header .who { display: flex; align-items: center; gap: 10px; }
   #chat header b { font-size: 14px; display: block; line-height: 1.15; }
@@ -765,6 +782,7 @@
     <button class="act primary" type="submit">Send</button>
   </form>
 </aside>
+ <button id="chatFab" type="button" title="Talk to the tutor" aria-label="Talk to the tutor"><svg><use href="#f-chat"/></svg><span class="x">×</span><span class="dot"></span></button>
 
 <div id="panel">
   <h2 id="panelTitle">Here's what I read</h2>
@@ -2522,11 +2540,14 @@ const chatEl = document.getElementById('chat');
 const msgsEl = document.getElementById('msgs');
 const chatIn = document.getElementById('chatIn');
 const chatBtn = document.getElementById('chatBtn');
+const chatFab = document.getElementById('chatFab');       /* the bubble bottom-right: same toggle */
 chatBtn.onclick = () => {
   const open = chatEl.classList.toggle('open');
   chatBtn.setAttribute('aria-pressed', open);
-  if (open) chatIn.focus();
+  chatFab.classList.toggle('open', open);
+  if (open) { chatFab.classList.remove('unread'); chatIn.focus(); }
 };
+chatFab.onclick = () => chatBtn.onclick();
 document.getElementById('chatClose').onclick = () => chatBtn.onclick();
 
 /* the tutor explaining in the chat - the board shows the work, the chat says why */
@@ -2535,6 +2556,7 @@ function tutorSays(text, open = false) {
   chat.push({role: 'ai', text});
   renderChat(); dirty();
   if (open && !chatEl.classList.contains('open') && !chatBtn.disabled) chatBtn.onclick();
+  if (!chatEl.classList.contains('open')) chatFab.classList.add('unread');   /* it spoke while the card was closed */
 }
 
 function renderChat() {
