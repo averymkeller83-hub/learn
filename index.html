@@ -778,7 +778,7 @@
   <div id="lookChip"><span>✏️ I'll look at the board when you pause</span><button type="button" class="act" id="lookNow">Look now</button><button type="button" class="act icon" id="lookOff" title="Not this time">×</button></div>
   <form id="chatform">
     <button class="act" id="micBtn" type="button" title="Hold to talk"><svg width="18" height="18" style="vertical-align:-3px"><use href="#f-mic"/></svg></button>
-    <input id="chatIn" placeholder="Ask, or hold the mic and talk" autocomplete="off">
+    <input id="chatIn" placeholder="Ask, say “draw me…”, or hold the mic" autocomplete="off">
     <button class="act primary" type="submit">Send</button>
   </form>
 </aside>
@@ -1059,12 +1059,30 @@ function drawPaper(c) {
 function drawStroke(c, s) {
   if (s.reveal === 0) return;                   /* not started yet: nothing, not a dot (round caps paint a dot at zero length) */
   c.strokeStyle = s.color;
-  c.lineWidth = s.width;
   c.globalAlpha = s.alpha || 1;                 /* the highlighter is see-through */
+  const pts = s.reveal != null && s.reveal < 1 ? partialPts(s.pts, s.reveal) : s.pts;
+  if (s.vw && pts.length > 2) { drawVariable(c, s, pts); c.globalAlpha = 1; return; }
+  c.lineWidth = s.width;
   c.beginPath();
-  tracePath(c, s.reveal != null && s.reveal < 1 ? partialPts(s.pts, s.reveal) : s.pts);
+  tracePath(c, pts);
   c.stroke();
   c.globalAlpha = 1;
+}
+
+/* ---- a pressure stroke: the width follows the hand. Each smoothed segment
+   (midpoint to midpoint through the sample) is stroked at its own width; the
+   round caps overlap into one continuous line. Light press = thin, lean in = bold. ---- */
+const segW = (s, p) => s.width * (p == null ? 1 : 0.55 + 0.9 * Math.min(1, p));
+function drawVariable(c, s, pts) {
+  let prev = {x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2};
+  c.lineWidth = segW(s, pts[0].p); c.beginPath(); c.moveTo(pts[0].x, pts[0].y); c.lineTo(prev.x, prev.y); c.stroke();
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
+    c.lineWidth = segW(s, pts[i].p); c.beginPath(); c.moveTo(prev.x, prev.y); c.quadraticCurveTo(pts[i].x, pts[i].y, mx, my); c.stroke();
+    prev = {x: mx, y: my};
+  }
+  const l = pts[pts.length - 1];
+  c.lineWidth = segW(s, l.p); c.beginPath(); c.moveTo(prev.x, prev.y); c.lineTo(l.x, l.y); c.stroke();
 }
 
 /* the first `r` of a stroke's length, ending exactly on the line - so a stroke
@@ -1156,18 +1174,31 @@ cv.addEventListener('pointerdown', e => {
   if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open'); progEl.classList.remove('on');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
-    if (drawing || erasing || performance.now() - lastPenAt < PALM_MS) return;   /* a palm */
+    if ((drawing && penSeen) || (erasing && penSeen) || performance.now() - lastPenAt < PALM_MS) return;   /* a palm, when a pen is in play */
 
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
     if (penSeen && touches.size === 1) return;                                  /* also a palm */
     capture(e);
     if (touches.size === 2) {                /* second finger: a pinch begins */
+      if (drawing && !penSeen) {             /* the first finger was writing: keep a real stroke, drop a tap */
+        if (drawing.pts.length > 3) commitStroke(); else { drawing = null; drawingId = null; }
+        lasso = null; shaping = null; if (erasing) { erasing = null; }
+      }
       const [a, b] = [...touches.values()];
       pinch = {dist: Math.hypot(a.x - b.x, a.y - b.y),
                mid: {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2},
                zoom0: zoom, pan0: {...pan}};
       panFrom = null;
-    } else if (touches.size === 1) {         /* one finger, no pen yet: move the paper */
+    } else if (touches.size === 1) {
+      /* one finger, no pen ever seen on this page: on a phone the finger IS the pen.
+         It writes (or erases, or lassos - whatever tool is up); two fingers pan and zoom. */
+      if (tool === 'pen' || tool === 'eraser' || tool === 'select' || tool === 'shape') {
+        panFrom = null;
+        if (tool === 'eraser') { erasing = {strokes: [], marks: [], lines: []}; eraseAt(pt(e)); return; }
+        if (tool === 'select') { setSelection(null); lasso = [pt(e)]; return; }
+        if (tool === 'shape') { shaping = {from: pt(e)}; return; }
+        drawing = newStroke(e); drawingId = e.pointerId; return;
+      }
       panFrom = {x: e.clientX - pan.x, y: e.clientY - pan.y};
     }
     return;
@@ -1224,13 +1255,21 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
 
-  /* pen pressure gives a live line width; a mouse reports 0, so fall back */
-  drawing = {color: pen, width: penWidth(e) * (highlighter ? 4 : 1), pts: [pt(e)], alpha: highlighter ? .35 : 1};
+  /* a pen's pressure shapes the line as it goes (vw); a mouse or finger reports none, so one width */
+  drawing = newStroke(e);
   drawingId = e.pointerId;
 });
 
+function newStroke(e) {
+  const pressured = e.pointerType === 'pen' && !highlighter;
+  return {color: pen, width: (pressured ? 2.6 * thickness : penWidth(e)) * (highlighter ? 4 : 1),
+          pts: [pt(e)], alpha: highlighter ? .35 : 1, ...(pressured ? {vw: true} : {})};
+}
+
 cv.addEventListener('pointermove', e => {
-  if (e.pointerType === 'touch') {
+  const fingerInk = e.pointerType === 'touch' && !penSeen && touches.size === 1 && e.pointerId === (drawingId ?? -1) && drawing;
+  const fingerTool = e.pointerType === 'touch' && !penSeen && touches.size === 1 && (lasso || erasing || shaping);
+  if (e.pointerType === 'touch' && !fingerInk && !fingerTool) {
     if (!touches.has(e.pointerId)) return;   /* a palm we chose to ignore */
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
 
@@ -1254,7 +1293,7 @@ cv.addEventListener('pointermove', e => {
     return;
   }
 
-  lastPenAt = performance.now();
+  if (e.pointerType !== 'touch') lastPenAt = performance.now();   /* a finger writing is not a pen: it must not turn the next finger into a palm */
   if (shaping) { drawing = shapeStroke(shaping.from, pt(e)); return redraw(); }
   if (spacing) {
     const y = pt(e).y, dy = y - spacing.last;
@@ -1276,7 +1315,7 @@ cv.addEventListener('pointermove', e => {
      button never inks; hover reports no buttons and no pressure, so it never
      triggers either. */
   if (!drawing && penDown && tool === 'pen' && ((e.buttons & 1) || e.pressure > 0)) {
-    drawing = {color: pen, width: penWidth(e) * (highlighter ? 4 : 1), pts: [pt(e)], alpha: highlighter ? .35 : 1};
+    drawing = newStroke(e);
     drawingId = e.pointerId;
     capture(e);
   }
@@ -1290,7 +1329,11 @@ cv.addEventListener('pointermove', e => {
   const coalesced = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
   const events = coalesced && coalesced.length ? coalesced : [e];
   const from = drawing.pts.length;
-  for (const ce of events) drawing.pts.push(pt(ce));
+  for (const ce of events) {
+    const q = pt(ce), last = drawing.pts[drawing.pts.length - 1];
+    if (q.p != null && last && last.p != null) q.p = 0.5 * q.p + 0.5 * last.p;   /* pressure eased, so the width doesn't flicker */
+    drawing.pts.push(q);
+  }
 
   /* Draw only the new bit of THIS stroke, not the whole board again.
      A full redraw per sample is what made ink trail behind the pen. */
@@ -1298,15 +1341,18 @@ cv.addEventListener('pointermove', e => {
   ctx.translate(pan.x, pan.y);
   ctx.scale(zoom, zoom);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = drawing.color; ctx.lineWidth = drawing.width;
-  ctx.beginPath();
-  tracePath(ctx, drawing.pts.slice(Math.max(0, from - 2)));
-  ctx.stroke();
+  ctx.strokeStyle = drawing.color; ctx.globalAlpha = drawing.alpha || 1;
+  const tail = drawing.pts.slice(Math.max(0, from - 2));
+  if (drawing.vw && tail.length > 2) drawVariable(ctx, drawing, tail);
+  else { ctx.lineWidth = drawing.width; ctx.beginPath(); tracePath(ctx, tail); ctx.stroke(); }
+  ctx.globalAlpha = 1;
   ctx.restore();
 });
 
 function done(e) {
-  if (e.pointerType === 'touch') {
+  if (e.pointerType === 'touch' && !penSeen && (drawing || lasso || erasing || shaping) && (drawingId === null || drawingId === e.pointerId)) {
+    touches.delete(e.pointerId);            /* the finger that was writing lifts: commit exactly as a pen would */
+  } else if (e.pointerType === 'touch') {
     touches.delete(e.pointerId);
     if (touches.size < 2) pinch = null;
     if (touches.size === 0) panFrom = null;
@@ -1351,7 +1397,7 @@ function commitStroke() {
   if (drawing.pts.length === 1) drawing.pts.push({...drawing.pts[0]});   /* a tap = a dot */
   strokes.push(drawing);
   record({type: 'add', stroke: drawing});
-  lastPenAt = performance.now();
+  if (penSeen) lastPenAt = performance.now();
   dirty(); coachTick();
   drawing = null; drawingId = null;
   armLook();
@@ -1576,7 +1622,8 @@ function zoomAt(sx, sy, z) {
 }
 
 /* the point, in board space — pan and zoom undone, so ink lands where the pen is */
-const pt = e => ({x: (e.clientX - pan.x) / zoom, y: (e.clientY - pan.y) / zoom});
+const pt = e => ({x: (e.clientX - pan.x) / zoom, y: (e.clientY - pan.y) / zoom,
+                  ...(e.pointerType === 'pen' && e.pressure > 0 ? {p: e.pressure} : {})});   /* a pen brings its pressure along */
 const penWidth = e => ((e.pressure > 0 && e.pointerType === 'pen')
   ? 1.2 + e.pressure * 3.4 : 2.4) * thickness;
 
@@ -2510,6 +2557,47 @@ function renderBoard(board, beside = false) {
         aiMarks.push({x: tip.x + (d.x / n) * fs * 0.8 - (d.x < -0.3 ? fs * lbl.length * 0.55 : 0), y: tip.y + (d.y / n) * fs * 0.8 - fs * 0.5, size: fs, text: lbl, shown: lbl.length});
       });
       y0 = Math.max(cy + arm * 1.4, y0 + S * 0.62) + size; sketching = shown = true;
+    } else if (it.chart && typeof it.chart === 'object' && Array.isArray(it.chart.values)) {
+      /* ---- a chart from numbers - bar, line or pie - drawn exactly by the page. The
+         student asked to see their data; this is what "draw me a chart" produces. ---- */
+      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
+      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+      const vals = it.chart.values.map(v => +v || 0).slice(0, 12), labels = (it.chart.labels || []).map(x => String(x ?? '')), kind = String(it.chart.type || 'bar');
+      const S = Math.min(W, beside ? 380 : 520), CW = S, CH = S * 0.6, fs = Math.max(13, size * 0.66);
+      const left = x0 + fs * 2.4, top = y0 + fs * 1.8, right = left + CW - fs * 2.4, base = top + CH;
+      if (it.chart.title) aiMarks.push({x: x0, y: y0, size: fs, text: String(it.chart.title).slice(0, 40), shown: 40});
+      if (kind === 'pie') {
+        const total = vals.reduce((a, b) => a + b, 0) || 1, cx = left + (right - left) / 2, cy = top + CH / 2, r = Math.min(right - left, CH) * 0.42;
+        let a0 = -Math.PI / 2;
+        vals.forEach((v, i) => {
+          const a1 = a0 + v / total * Math.PI * 2, arc = Array.from({length: 25}, (_, k) => { const t = a0 + (a1 - a0) * k / 24; return {x: cx + r * Math.cos(t), y: cy + r * Math.sin(t)}; });
+          strokes.push({color: AI_INK, width: 2.4, alpha: 1, ai: true, pts: arc}, straight({x: cx, y: cy}, arc[0], 2));
+          const mid = (a0 + a1) / 2, lbl = (labels[i] || '') + ' ' + Math.round(v / total * 100) + '%';
+          aiMarks.push({x: cx + (r + fs * 0.8) * Math.cos(mid) - (Math.cos(mid) < 0 ? fs * lbl.length * 0.5 : 0), y: cy + (r + fs * 0.8) * Math.sin(mid) - fs * 0.5, size: fs, text: lbl, shown: lbl.length});
+          a0 = a1;
+        });
+        y0 = cy + r + fs * 2.5; sketching = shown = true;
+      } else {
+        const max = Math.max(...vals, 1), n = vals.length, gap = (right - left) / n;
+        strokes.push(straight({x: left, y: top}, {x: left, y: base}, 2.4), straight({x: left, y: base}, {x: right, y: base}, 2.4));
+        aiMarks.push({x: left - fs * 2.2, y: top - fs * 0.5, size: fs, text: String(max), shown: 8}, {x: left - fs * 1.2, y: base - fs * 0.5, size: fs, text: '0', shown: 1});
+        const pts = [];
+        vals.forEach((v, i) => {
+          const h = v / max * (CH - fs), xL = left + gap * i + gap * 0.2, xR = left + gap * (i + 1) - gap * 0.2, yTop = base - h;
+          if (kind === 'line') pts.push({x: (xL + xR) / 2, y: yTop});
+          else {
+            strokes.push(straight({x: xL, y: base}, {x: xL, y: yTop}, 2.4), straight({x: xL, y: yTop}, {x: xR, y: yTop}, 2.4), straight({x: xR, y: yTop}, {x: xR, y: base}, 2.4));
+            for (let yy = yTop + 5; yy < base - 2; yy += 6) strokes.push(straight({x: xL + 2, y: yy}, {x: xR - 2, y: yy}, 2, 0.25));
+            aiMarks.push({x: (xL + xR) / 2 - fs * String(v).length * 0.28, y: yTop - fs * 1.35, size: fs, text: String(v), shown: 8});
+          }
+          if (labels[i]) aiMarks.push({x: (xL + xR) / 2 - fs * Math.min(labels[i].length, 10) * 0.27, y: base + fs * 0.4, size: fs, text: labels[i].slice(0, 12), shown: 12});
+        });
+        if (kind === 'line' && pts.length) {
+          for (let i = 1; i < pts.length; i++) strokes.push(straight(pts[i - 1], pts[i], 2.6));
+          pts.forEach((q, i) => { strokes.push(straight({x: q.x - 4, y: q.y}, {x: q.x + 4, y: q.y}, 6)); aiMarks.push({x: q.x - fs * String(vals[i]).length * 0.28, y: q.y - fs * 1.5, size: fs, text: String(vals[i]), shown: 8}); });
+        }
+        y0 = base + fs * 2.6; sketching = shown = true;
+      }
     } else if (typeof it.plot === 'string') {
       /* graphs share one set of axes while plots come in a row; the axes take the whole sketch area */
       if (!plotAxes) plotAxes = makeAxes(x0, y0, W, H, it.x, it.y);
