@@ -2260,7 +2260,12 @@ function aiBottom() {
    of their work when there is room, so the space under their problem stays
    theirs for the next line - otherwise under, as before. ---- */
 function tutorAnchor(beside) {
-  const box = bounds(), size = handSize(), o = visibleOrigin(), vw = visibleWidth();
+  /* the STUDENT's work sets the column - the tutor's own ink must not count,
+     or its first drawing would push its next line under the page */
+  let box = null;
+  for (const st of strokes) { if (st.tour || st.ai) continue; for (const q of st.pts) box = union(box, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y}); }
+  for (const t of texts) if (t.text.trim()) box = union(box, textBox(t));
+  const size = handSize(), o = visibleOrigin(), vw = visibleWidth();
   if (beside && box) {
     const gap = size * 2, x = box.maxX + gap, free = (o.x + vw) - x;
     if (box.maxX - o.x < vw * 0.55 && free >= 420)
@@ -2368,6 +2373,20 @@ function renderBoard(board, beside = false) {
   return shown;
 }
 let plotAxes = null;
+
+/* ---- what the tutor just put down must be SEEN. If the new marks and strokes
+   end below the visible page, pan up just enough to show them - and no more,
+   so the student's own work stays in view when it can. ---- */
+function revealTutorWork(before) {
+  let b = null;
+  for (const st of strokes.slice(before.strokes)) if (st.ai) for (const q of st.pts) b = union(b, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y});
+  for (const m of aiMarks.slice(before.marks)) b = union(b, markBox(m));
+  if (!b) return;
+  const bottom = b.maxY * zoom + pan.y, top = b.minY * zoom + pan.y, limit = innerHeight - 90;
+  if (bottom <= limit) return;
+  const shift = Math.min(bottom - limit, Math.max(0, top - 230));   /* never push the top of the new work above the header */
+  if (shift > 0) { pan.y -= shift; redraw(); }
+}
 
 /* ============================================================
    PLOTS — the board draws graphs itself, exactly. The model hands
@@ -2617,7 +2636,9 @@ document.getElementById('chatform').addEventListener('submit', async e => {
       if (o) { r.say = String(o.say || ''); r.board = o.board ?? r.board; }
       else r.say = r.say.replace(/^[\s\S]*?"say"\s*:\s*"/, '').replace(/",?[\s\S]*$/, '') || 'Sorry — say that again?';
     }
+    const before = {strokes: strokes.length, marks: aiMarks.length};
     const shown = renderBoard(r.board, true);        /* beside their work: the space under it is theirs */
+    if (shown) revealTutorWork(before);              /* if it drew below the fold, bring it into view */
     chat.push({role: 'ai', text: (r.say || '').trim() || '…', board: shown});
     const note = checksNote(r); if (note) say(note);
     inkMark = inkCount(); lookDone = false;              /* the tutor has spoken; what lands next is an answer */
