@@ -2460,6 +2460,41 @@ function renderBoard(board, beside = false) {
       for (let c = 0; c <= cols; c++) strokes.push(straight({x: left + c * colW, y: top}, {x: left + c * colW, y: bottom}, 2.2));
       all.forEach((row, r) => row.forEach((cell, c) => { if (cell.trim()) aiMarks.push({x: left + c * colW + fs * 0.5, y: top + r * rowH + fs * 0.45, size: fs, text: cell.slice(0, 22), shown: cell.length}); }));
       y0 = bottom + size; sketching = shown = true;
+    } else if (it.fbd && typeof it.fbd === 'object') {
+      /* ---- a free-body diagram, physics' picture: a block (on an incline if an angle is
+         given) with one labelled arrow per force. weight points straight down, normal
+         stands off the surface, friction runs along it, applied/tension along it the other
+         way. The page draws it so every force is there and legible. ---- */
+      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
+      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+      const arrow = (a, c, w = 3) => { const out = [straight(a, c, w)]; const ang = Math.atan2(c.y - a.y, c.x - a.x), L = 13;
+        for (const d of [ang + 2.6, ang - 2.6]) out.push(straight(c, {x: c.x + L * Math.cos(d), y: c.y + L * Math.sin(d)}, w)); return out; };
+      const ang = Math.max(0, Math.min(60, +it.fbd.angle || 0)) * Math.PI / 180;
+      const forces = (Array.isArray(it.fbd.forces) ? it.fbd.forces : []).map(f => typeof f === 'string' ? {kind: f} : f).filter(f => f && f.kind).slice(0, 6);
+      const names = Object.assign({weight: 'mg', normal: 'N', friction: 'f', applied: 'F', tension: 'T', drag: 'D', lift: 'L'}, it.fbd.labels || {});
+      const S = Math.min(W, 520), cx = x0 + S * 0.5, cy = y0 + S * 0.42, blk = S * 0.13, arm = S * 0.26, fs = Math.max(14, size * 0.8);
+      /* the incline: a right triangle whose slope rises to the left; the block sits on the slope */
+      if (ang > 0) {
+        const run = S * 0.7, rise = run * Math.tan(ang), bl = {x: cx - run * 0.35, y: cy + arm * 1.2}, br = {x: bl.x + run, y: bl.y};
+        strokes.push(straight(bl, br, 2.4), straight(bl, {x: bl.x, y: bl.y - rise}, 2.4), straight({x: bl.x, y: bl.y - rise}, br, 2.4));
+        aiMarks.push({x: br.x - fs * 3.2, y: br.y - fs * 1.6, size: fs, text: Math.round(ang * 180 / Math.PI) + '°', shown: 4});
+      }
+      /* the block, drawn as a square rotated to the surface */
+      const rot = (p) => ({x: cx + (p.x) * Math.cos(-ang) - (p.y) * Math.sin(-ang), y: cy + (p.x) * Math.sin(-ang) + (p.y) * Math.cos(-ang)});
+      const c4 = [rot({x: -blk/2, y: -blk/2}), rot({x: blk/2, y: -blk/2}), rot({x: blk/2, y: blk/2}), rot({x: -blk/2, y: blk/2})];
+      for (let k = 0; k < 4; k++) strokes.push(straight(c4[k], c4[(k + 1) % 4], 3));
+      /* unit directions: along the slope (down-slope to the right) and off the surface */
+      const along = {x: Math.cos(ang), y: Math.sin(ang)}, perp = {x: Math.sin(ang), y: -Math.cos(ang)};
+      const dirs = {weight: {x: 0, y: 1}, normal: perp, friction: {x: -along.x, y: -along.y}, applied: along, tension: {x: -along.x, y: -along.y}, drag: {x: -along.x, y: -along.y}, lift: perp};
+      forces.forEach(f => {
+        const d = f.dir && Array.isArray(f.dir) ? {x: +f.dir[0] || 0, y: +f.dir[1] || 0} : (dirs[f.kind] || {x: 1, y: 0});
+        const n = Math.hypot(d.x, d.y) || 1, len = arm * (f.kind === 'weight' ? 1.15 : 1);
+        const tip = {x: cx + d.x / n * len, y: cy + d.y / n * len};
+        strokes.push(...arrow({x: cx, y: cy}, tip));
+        const lbl = String(f.label || names[f.kind] || f.kind);
+        aiMarks.push({x: tip.x + (d.x / n) * fs * 0.8 - (d.x < -0.3 ? fs * lbl.length * 0.55 : 0), y: tip.y + (d.y / n) * fs * 0.8 - fs * 0.5, size: fs, text: lbl, shown: lbl.length});
+      });
+      y0 = cy + arm * 1.6 + size; sketching = shown = true;
     } else if (typeof it.plot === 'string') {
       /* graphs share one set of axes while plots come in a row; the axes take the whole sketch area */
       if (!plotAxes) plotAxes = makeAxes(x0, y0, W, H, it.x, it.y);
