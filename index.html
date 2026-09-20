@@ -2362,6 +2362,7 @@ function renderBoard(board, beside = false) {
   if (!Array.isArray(board)) return false;
 
   const firstNew = strokes.length;               /* everything pushed from here on is drawn on, not popped in */
+  const marksBefore = aiMarks.length, numsThisReply = new Set();   /* for the plan-once rule */
   const a = tutorAnchor(beside);                 /* same column the writing uses */
   const size = a.size;
   const x0 = a.x;
@@ -2374,6 +2375,11 @@ function renderBoard(board, beside = false) {
   for (const it of board) {
     if (!it || typeof it !== 'object') continue;
     if (typeof it.write === 'string' && it.write.trim()) {
+      /* the plan goes on the page once: a numbered line whose number already stands
+         on the page from an EARLIER reply is a re-plan, and is dropped */
+      const num = (it.write.trim().match(/^(\d{1,2})[.)]\s/) || [])[1];
+      if (num && !numsThisReply.has(num) && aiMarks.slice(0, marksBefore).some(m => new RegExp('^' + num + '[.)]\\s').test(m.text.trim()))) continue;
+      if (num) numsThisReply.add(num);
       if (sketching) { y0 += H + size; sketching = false; }          /* text after a sketch goes under it */
       write(it.write.trim(), beside); shown = true;
       y0 = Math.max(y0, aiBottom() + size * 0.8);
