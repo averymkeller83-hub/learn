@@ -241,28 +241,48 @@
   /* ============================================================
      THE CHAT — talk to the tutor. It sees the board every time.
      ============================================================ */
+  /* ---- the tutor pane: a warm sheet, not a white box. Bubbles sit on it in
+     white (tutor) and purple (you), each with a small tail; the tutor's
+     avatar is a dot of its own ink. Board messages keep the amber edge and
+     get a little "on the board" pill instead of a bare line of text. ---- */
   #chat {
     position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 100vw); z-index: 30;
-    background: var(--ui); border-left: 1px solid var(--edge);
+    background: var(--side); border-left: 1px solid var(--edge); box-shadow: -10px 0 28px rgba(0,0,0,.05);
     transform: translateX(100%); transition: transform .18s ease;
     display: flex; flex-direction: column;
     -webkit-user-select: text; user-select: text;
   }
   #chat.open { transform: none; }
-  #chat header { padding: 14px 16px 10px; border-bottom: 1px solid var(--edge); display: flex; justify-content: space-between; align-items: center; }
-  #chat header b { font-size: 14px; }
-  #msgs { flex: 1; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
-  .msg { max-width: 88%; padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+  #chat header { padding: 12px 12px 10px 14px; border-bottom: 1px solid rgba(0,0,0,.06); display: flex; justify-content: space-between; align-items: center; }
+  #chat header .who { display: flex; align-items: center; gap: 10px; }
+  #chat header b { font-size: 14px; display: block; line-height: 1.15; }
+  #chat header small { font-size: 12px; color: var(--muted); display: block; }
+  .ava { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; background: var(--ai-ink); color: #fff;
+         display: grid; place-items: center; box-shadow: 0 1px 2px rgba(0,0,0,.10); }
+  .ava svg { width: 14px; height: 14px; }
+  #msgs { flex: 1; overflow: auto; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row.you { justify-content: flex-end; }
+  .msg { position: relative; max-width: 84%; padding: 10px 13px; border-radius: 16px; font-size: 14.5px; line-height: 1.45;
+         white-space: pre-wrap; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .msg::after { content: ''; position: absolute; bottom: 0; width: 12px; height: 12px; }
   .msg.you { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
-  .msg.ai  { align-self: flex-start; background: var(--side); border-bottom-left-radius: 4px; }
+  .msg.you::after { right: -5px; background: var(--accent); clip-path: polygon(0 0, 100% 100%, 0 100%); }
+  .msg.ai  { align-self: flex-start; background: var(--ui); color: var(--text); border-bottom-left-radius: 4px; }
+  .msg.ai::after { left: -5px; background: var(--ui); clip-path: polygon(100% 0, 100% 100%, 0 100%); }
   .msg.ai.board { border-left: 3px solid var(--ai-ink); }
-  .msg.thinking { color: var(--muted); font-style: italic; background: transparent; }
-  #lookChip { display: none; align-items: center; gap: 8px; margin: 0 12px 8px; padding: 6px 8px 6px 10px; border: 1px dashed var(--edge); border-radius: 10px; font-size: 13px; color: var(--muted); }
+  .msg.ai.board::after { display: none; }
+  .onboard { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; padding: 2px 9px 2px 7px; border-radius: 999px;
+             background: #fbe9e0; color: var(--ai-ink); font-size: 12px; line-height: 1.5; white-space: nowrap; }
+  .msg.thinking { color: var(--muted); font-style: italic; background: transparent; box-shadow: none; }
+  .msg.thinking::after { display: none; }
+  #lookChip { display: none; align-items: center; gap: 8px; margin: 0 14px 8px; padding: 6px 8px 6px 10px; border: 1px dashed var(--edge); border-radius: 10px; font-size: 13px; color: var(--muted); }
   #lookChip.on { display: flex; } #lookChip span { flex: 1; }
-  #chatform { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--edge); }
-  #chatform #micBtn { padding: 9px 11px; }
+  #chatform { display: flex; gap: 8px; padding: 10px 14px 14px; align-items: center; }
+  #chatform #micBtn { width: 38px; height: 38px; padding: 0; border-radius: 999px; display: grid; place-items: center; background: var(--ui); }
   #chatform #micBtn[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
-  #chatform input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 10px; background: var(--paper); color: var(--text); }
+  #chatform .primary { border-radius: 999px; padding: 9px 16px; }
+  #chatform input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 9px 14px; border: 1px solid var(--edge); border-radius: 999px; background: var(--ui); color: var(--text); }
 
   /* ============================================================
      THE READ-BACK PANEL — only when the model wasn't sure.
@@ -733,7 +753,10 @@
 </aside>
 
 <aside id="chat">
-  <header><b>Tutor</b><button class="act icon" id="chatClose" title="Close">×</button></header>
+  <header>
+    <div class="who"><span class="ava"><svg><use href="#f-pen"/></svg></span><div><b>Tutor</b><small>can see this page</small></div></div>
+    <button class="act icon" id="chatClose" title="Close">×</button>
+  </header>
   <div id="msgs"></div>
   <div id="lookChip"><span>✏️ I'll look at the board when you pause</span><button type="button" class="act" id="lookNow">Look now</button><button type="button" class="act icon" id="lookOff" title="Not this time">×</button></div>
   <form id="chatform">
@@ -2242,7 +2265,8 @@ function write(text) {
 
 /* ============================================================
    renderBoard — the tutor's whiteboard moves. It may hand back a
-   plain string (write it) or a list of steps: write / draw / label.
+   plain string (write it) or a list of steps: write / draw / label /
+   polyline / polygon / plot / svg / bars.
    Shapes and labels land in a sketch area under the writing, in the
    tutor's colour; its strokes are flagged ai:true so the snapshot
    leaves them out and the lasso can still remove them.
@@ -2278,6 +2302,29 @@ function renderBoard(board) {
     } else if (Array.isArray(it.polygon) && it.polygon.length > 2) {
       const pts = it.polygon.filter(Array.isArray).map(P); pts.push({...pts[0]}, {x: pts[0].x + .01, y: pts[0].y});
       strokes.push({color: AI_INK, width: 2.6, alpha: 1, ai: true, pts}); sketching = shown = true;
+    } else if (Array.isArray(it.bars) && it.bars.length) {
+      /* ---- equal-part bars: the fraction picture the tutor reaches for most.
+         Each bar is one whole, cut into "parts" equal cells, the first "shade"
+         cells filled with thin hatch lines so the student's ink stays separate.
+         The stroke renderer smooths through points, so every straight edge is
+         laid down as a run of collinear points - otherwise a rectangle comes
+         out as a lens. One row per bar, label at the right, tutor's colour. ---- */
+      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
+      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+      const rows = it.bars.filter(b => b && typeof b === 'object').slice(0, 6);
+      const rowH = Math.min(H / rows.length, size * 3.2), barH = rowH * 0.62, barW = W * 0.72, left = x0;
+      rows.forEach((b, i) => {
+        const parts = Math.max(1, Math.min(24, Math.round(+b.parts || 1)));
+        const shade = Math.max(0, Math.min(parts, Math.round(+b.shade || 0)));
+        const top = y0 + i * rowH, bot = top + barH, cw = barW / parts;
+        for (let yy = top + 4; shade && yy < bot - 2; yy += 5)                      /* the fill: hatch, clipped to the shaded cells */
+          strokes.push(straight({x: left + 2, y: yy}, {x: left + shade * cw - 2, y: yy}, 2.2, 0.28));
+        strokes.push(straight({x: left, y: top}, {x: left + barW, y: top}), straight({x: left + barW, y: top}, {x: left + barW, y: bot}),
+                     straight({x: left + barW, y: bot}, {x: left, y: bot}), straight({x: left, y: bot}, {x: left, y: top}));
+        for (let k = 1; k < parts; k++) strokes.push(straight({x: left + k * cw, y: top}, {x: left + k * cw, y: bot}));
+        if (b.label) aiMarks.push({x: left + barW + size * 0.6, y: (top + bot) / 2 - size * 0.45, size: Math.max(14, size * 0.8), text: String(b.label).trim(), shown: String(b.label).length});
+      });
+      sketching = shown = true;
     } else if (typeof it.plot === 'string') {
       /* graphs share one set of axes while plots come in a row; the axes take the whole sketch area */
       if (!plotAxes) plotAxes = makeAxes(x0, y0, W, H, it.x, it.y);
@@ -2492,18 +2539,18 @@ function tutorSays(text, open = false) {
 
 function renderChat() {
   msgsEl.innerHTML = '';
-  if (!chat.length) {
-    const hello = document.createElement('div');
-    hello.className = 'msg ai';
-    hello.textContent = "I can see this page — it's our whiteboard. Ask me anything, say \"walk me through this\", or \"give me a problem\" and I'll put one on the board.";
-    msgsEl.appendChild(hello);
-  }
-  for (const m of chat) {
-    const d = document.createElement('div');
-    d.className = 'msg ' + m.role + (m.board ? ' board' : '');
-    d.textContent = m.text + (m.board ? '\n✎ written on the board' : '');
-    msgsEl.appendChild(d);
-  }
+  /* one row per message: the tutor's rows carry its avatar, yours sit to the right;
+     a message that also drew on the board says so in a small pill, not a bare line */
+  const row = (role, text, board) => {
+    const r = document.createElement('div'); r.className = 'row ' + role;
+    if (role === 'ai') { const a = document.createElement('span'); a.className = 'ava'; a.innerHTML = '<svg><use href="#f-pen"/></svg>'; r.appendChild(a); }
+    const d = document.createElement('div'); d.className = 'msg ' + role + (board ? ' board' : '');
+    d.textContent = text;
+    if (board) { const pill = document.createElement('span'); pill.className = 'onboard'; pill.textContent = '✎ on the board'; d.appendChild(document.createElement('br')); d.appendChild(pill); }
+    r.appendChild(d); msgsEl.appendChild(r);
+  };
+  if (!chat.length) row('ai', "I can see this page — it's our whiteboard. Ask me anything, say \"walk me through this\", or \"give me a problem\" and I'll put one on the board.", false);
+  for (const m of chat) row(m.role, m.text, !!m.board);
   msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 
