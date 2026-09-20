@@ -1051,6 +1051,7 @@ function drawPaper(c) {
 }
 
 function drawStroke(c, s) {
+  if (s.reveal === 0) return;                   /* not started yet: nothing, not a dot (round caps paint a dot at zero length) */
   c.strokeStyle = s.color;
   c.lineWidth = s.width;
   c.globalAlpha = s.alpha || 1;                 /* the highlighter is see-through */
