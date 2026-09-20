@@ -1992,7 +1992,16 @@ titleEl.addEventListener('input', () => { if (current) { current.title = titleEl
 const examOpen = () => !!(current && current.exam && !current.exam.graded);   /* an exam not yet graded */
 
 checkEl.onclick = async () => {
-  shot = snapshot({withAI: examOpen()});             /* the grader must see the printed problems */
+
+  /* what the grader looks at: the student's ink - or, with no ink yet, the worksheet itself.
+     A scanned page full of their handwriting is their work as much as a live stroke is. */
+  let box = bounds();
+  if (!box) for (const pg of pages) {
+    if (pg.pic) continue;
+    box = union(box, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h});
+  }
+
+  shot = box ? snapshot({box, withAI: examOpen()}) : null;   /* the grader must see the printed problems */
   if (!shot) return say('Write something first.', true);
   if (examOpen() && current.exam.locked) { current.exam.locked = false; applyExamState(); dirty(); }
 
