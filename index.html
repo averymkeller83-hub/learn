@@ -999,9 +999,11 @@ function paint(c, {shadows = false, ai = true, pdf = true, revealed = true} = {}
   c.textBaseline = 'top';
   for (const m of aiMarks) {
     c.font = aiFont(m.size);
+    c.globalAlpha = m.alpha || 1;                /* earlier steps fade back so the current one leads */
     const lines = (revealed ? m.text.slice(0, m.shown) : m.text).split('\n');
     lines.forEach((ln, i) => c.fillText(ln, m.x, m.y + i * m.size * 1.35));
   }
+  c.globalAlpha = 1;
 }
 
 /* ============================================================
@@ -2367,6 +2369,10 @@ function renderBoard(board, beside = false) {
 
   const firstNew = strokes.length;               /* everything pushed from here on is drawn on, not popped in */
   const marksBefore = aiMarks.length, numsThisReply = new Set();   /* for the plan-once rule */
+  if (beside) {                                  /* the step before fades back; the plan (numbered lines) stays full */
+    for (const st of strokes) if (st.ai && !st.strike) st.alpha = Math.min(st.alpha || 1, 0.5);
+    for (const m of aiMarks) if (!/^\d{1,2}[.)]\s/.test(m.text.trim())) m.alpha = 0.5;
+  }
   const a = tutorAnchor(beside);                 /* same column the writing uses */
   const size = a.size;
   const x0 = a.x;
@@ -2476,7 +2482,7 @@ function renderBoard(board, beside = false) {
       const ang = Math.max(0, Math.min(60, +it.fbd.angle || 0)) * Math.PI / 180;
       const forces = (Array.isArray(it.fbd.forces) ? it.fbd.forces : []).map(f => typeof f === 'string' ? {kind: f} : f).filter(f => f && f.kind).slice(0, 6);
       const names = Object.assign({weight: 'mg', normal: 'N', friction: 'f', applied: 'F', tension: 'T', drag: 'D', lift: 'L'}, it.fbd.labels || {});
-      const S = Math.min(W, 520), blk = S * 0.13, arm = S * 0.26, fs = Math.max(14, size * 0.8);
+      const S = Math.min(W, beside ? 380 : 520), blk = S * 0.13, arm = S * 0.26, fs = Math.max(14, size * 0.8);
       let cx = x0 + S * 0.5, cy = y0 + S * 0.42;
       /* unit directions: along the slope (down-slope to the right) and off the surface */
       const along = {x: Math.cos(ang), y: Math.sin(ang)}, perp = {x: Math.sin(ang), y: -Math.cos(ang)};
@@ -2529,9 +2535,13 @@ function revealTutorWork(before) {
   for (const st of strokes.slice(before.strokes)) if (st.ai) for (const q of st.pts) b = union(b, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y});
   for (const m of aiMarks.slice(before.marks)) b = union(b, markBox(m));
   if (!b) return;
+  /* the student's newest line must stay in view: the tutor's note is about it */
+  let mine = null; for (const st of strokes) if (!st.ai && !st.tour && st.pts.length) { const q = st.pts[st.pts.length - 1]; if (!mine || q.y > mine.y) mine = q; }
+  for (const t of texts) if (t.text.trim()) { const tb = textBox(t); if (!mine || tb.maxY > mine.y) mine = {x: tb.minX, y: tb.maxY}; }
   const bottom = b.maxY * zoom + pan.y, top = b.minY * zoom + pan.y, limit = innerHeight - 90;
   if (bottom <= limit) return;
-  const shift = Math.min(bottom - limit, Math.max(0, top - 230));   /* never push the top of the new work above the header */
+  let shift = Math.min(bottom - limit, Math.max(0, top - 230));      /* never push the top of the new work above the header */
+  if (mine) shift = Math.min(shift, Math.max(0, mine.y * zoom + pan.y - 250));   /* ...and never push the student's latest line off the top */
   if (shift > 0) { pan.y -= shift; redraw(); }
 }
 
