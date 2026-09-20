@@ -2242,7 +2242,8 @@ function write(text) {
 
 /* ============================================================
    renderBoard — the tutor's whiteboard moves. It may hand back a
-   plain string (write it) or a list of steps: write / draw / label.
+   plain string (write it) or a list of steps: write / draw / label /
+   polyline / polygon / plot / svg / bars.
    Shapes and labels land in a sketch area under the writing, in the
    tutor's colour; its strokes are flagged ai:true so the snapshot
    leaves them out and the lasso can still remove them.
@@ -2278,6 +2279,29 @@ function renderBoard(board) {
     } else if (Array.isArray(it.polygon) && it.polygon.length > 2) {
       const pts = it.polygon.filter(Array.isArray).map(P); pts.push({...pts[0]}, {x: pts[0].x + .01, y: pts[0].y});
       strokes.push({color: AI_INK, width: 2.6, alpha: 1, ai: true, pts}); sketching = shown = true;
+    } else if (Array.isArray(it.bars) && it.bars.length) {
+      /* ---- equal-part bars: the fraction picture the tutor reaches for most.
+         Each bar is one whole, cut into "parts" equal cells, the first "shade"
+         cells filled with thin hatch lines so the student's ink stays separate.
+         The stroke renderer smooths through points, so every straight edge is
+         laid down as a run of collinear points - otherwise a rectangle comes
+         out as a lens. One row per bar, label at the right, tutor's colour. ---- */
+      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
+      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+      const rows = it.bars.filter(b => b && typeof b === 'object').slice(0, 6);
+      const rowH = Math.min(H / rows.length, size * 3.2), barH = rowH * 0.62, barW = W * 0.72, left = x0;
+      rows.forEach((b, i) => {
+        const parts = Math.max(1, Math.min(24, Math.round(+b.parts || 1)));
+        const shade = Math.max(0, Math.min(parts, Math.round(+b.shade || 0)));
+        const top = y0 + i * rowH, bot = top + barH, cw = barW / parts;
+        for (let yy = top + 4; shade && yy < bot - 2; yy += 5)                      /* the fill: hatch, clipped to the shaded cells */
+          strokes.push(straight({x: left + 2, y: yy}, {x: left + shade * cw - 2, y: yy}, 2.2, 0.28));
+        strokes.push(straight({x: left, y: top}, {x: left + barW, y: top}), straight({x: left + barW, y: top}, {x: left + barW, y: bot}),
+                     straight({x: left + barW, y: bot}, {x: left, y: bot}), straight({x: left, y: bot}, {x: left, y: top}));
+        for (let k = 1; k < parts; k++) strokes.push(straight({x: left + k * cw, y: top}, {x: left + k * cw, y: bot}));
+        if (b.label) aiMarks.push({x: left + barW + size * 0.6, y: (top + bot) / 2 - size * 0.45, size: Math.max(14, size * 0.8), text: String(b.label).trim(), shown: String(b.label).length});
+      });
+      sketching = shown = true;
     } else if (typeof it.plot === 'string') {
       /* graphs share one set of axes while plots come in a row; the axes take the whole sketch area */
       if (!plotAxes) plotAxes = makeAxes(x0, y0, W, H, it.x, it.y);
