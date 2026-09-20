@@ -3212,7 +3212,9 @@ function teachThis() {
   pendingShot = snapshot({box, withAI: onlyAI});
   teachEl.classList.remove('on');
   if (!chatEl.classList.contains('open')) chatBtn.onclick();
-  chatIn.value = `Teach me the problem ${circled ? 'I circled' : 'on this page'}. Don't just solve it — ask what I already know, put a plan on the board, and take me through it one step at a time.`;
+  /* the ask itself must not force a quiz: a ? or a blank on the page means "teach me", so the
+     tutor is told to read the page first and skip the questions when the page already answers them */
+  chatIn.value = `Teach me the problem ${circled ? 'I circled' : 'on this page'}. Don't just solve it. If I've written a ? or left it blank, don't quiz me — put the plan on the board and teach step 1 with a picture. Otherwise ask what I already know first, then take me through it one step at a time.`;
   document.getElementById('chatform').requestSubmit();
 }
 document.getElementById('teachTopic').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('teachGo').onclick(); });
