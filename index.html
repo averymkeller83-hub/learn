@@ -2314,7 +2314,9 @@ function tutorAnchor(beside) {
   let box = null;
   for (const st of strokes) { if (st.tour || st.ai) continue; for (const q of st.pts) box = union(box, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y}); }
   for (const t of texts) if (t.text.trim()) box = union(box, textBox(t));
-  const size = handSize(), o = visibleOrigin(), vw = visibleWidth();
+  /* walking alongside, the tutor writes smaller than the student - a margin note, not a
+     headline - so a plan and a picture fit on one screen with the student's work */
+  const size = beside ? handSize() * 0.72 : handSize(), o = visibleOrigin(), vw = visibleWidth();
   if (beside && box) {
     const gap = size * 2, x = box.maxX + gap, free = (o.x + vw) - x;
     if (box.maxX - o.x < vw * 0.55 && free >= 420)
