@@ -1919,7 +1919,11 @@ async function runCheck() {
     } else {
       /* The board shows ONLY the work done right: strike the wrong bit where it
          sits, write the corrected lines under it. The WHY goes to the chat. */
-      const wrong = Array.isArray(v.wrong_box) && v.wrong_box.length === 4;
+      /* a "?", "idk", or a line that stops at "=" is a student asking, not a student wrong -
+         the model sometimes boxes the ? anyway, so decide from what it READ, not from the box */
+      const read = String(v.line || '') + ' ' + String(v.wrong_span || '');
+      const stuck = /\?|\bidk\b|\bhelp\b|=\s*$/i.test(read.trim()) || !(Array.isArray(v.wrong_box) && v.wrong_box.length === 4);
+      const wrong = !stuck;
       if (wrong) strike(v.wrong_box);
       const steps = (Array.isArray(v.steps) ? v.steps : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
       /* nothing was wrong -> they didn't attempt it (a "?", a blank): that is "teach me", so
