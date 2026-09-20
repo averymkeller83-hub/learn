@@ -2569,6 +2569,33 @@ function write(text, beside = false) {
    tutor's colour; its strokes are flagged ai:true so the snapshot
    leaves them out and the lasso can still remove them.
    ============================================================ */
+/* ============================================================
+   THE TUTOR'S RULER — straight lines the stroke smoother cannot bend.
+   The renderer eases every stroke through its points, so a line given as
+   two points comes out as a curve. These lay a line down as a run of
+   collinear points, so it stays straight. Every board picture below
+   (bars, timeline, table, free-body diagram, chart) is built from them.
+   ============================================================ */
+const inkPts = (a, c, n = 10) =>
+  Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
+
+const inkLine = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: inkPts(a, c)});
+
+/* an arrow: the line, then two short strokes for the head */
+function inkArrow(a, c, width = 3) {
+  const out = [inkLine(a, c, width)];
+  const ang = Math.atan2(c.y - a.y, c.x - a.x), L = 13;
+
+  for (const d of [ang + 2.6, ang - 2.6]) {
+    out.push(inkLine(c, {x: c.x + L * Math.cos(d), y: c.y + L * Math.sin(d)}, width));
+  }
+  return out;
+}
+
+/* a small handwritten label at a point */
+const inkLabel = (x, y, size, text) => ({x, y, size, text: String(text), shown: String(text).length});
+
+
 function renderBoard(board, beside = false) {
   if (!board) return false;
   if (typeof board === 'string') { if (!board.trim()) return false; write(board.trim(), beside); return true; }
@@ -2611,153 +2638,275 @@ function renderBoard(board, beside = false) {
       const pts = it.polygon.filter(Array.isArray).map(P); pts.push({...pts[0]}, {x: pts[0].x + .01, y: pts[0].y});
       strokes.push({color: AI_INK, width: 2.6, alpha: 1, ai: true, pts}); sketching = shown = true;
     } else if (Array.isArray(it.bars) && it.bars.length) {
-      /* ---- equal-part bars: the fraction picture the tutor reaches for most.
-         Each bar is one whole, cut into "parts" equal cells, the first "shade"
-         cells filled with thin hatch lines so the student's ink stays separate.
-         The stroke renderer smooths through points, so every straight edge is
-         laid down as a run of collinear points - otherwise a rectangle comes
-         out as a lens. One row per bar, label at the right, tutor's colour. ---- */
-      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
-      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+
+      /* ---- EQUAL-PART BARS: the fraction picture. Each bar is one whole cut into
+         "parts" equal cells; the first "shade" cells are filled with thin hatch lines
+         (so the student's own ink stays separate). "cut" re-divides the same bar into
+         finer parts with dashed lines - thirds shown as sixths, so 2/3 and 4/6 are
+         visibly the same bar. One row per bar, the label at the right. ---- */
       const rows = it.bars.filter(b => b && typeof b === 'object').slice(0, 6);
-      const rowH = Math.min(H / rows.length, size * 3.2), barH = rowH * 0.62, barW = W * 0.72, left = x0;
+
+      const rowH = Math.min(H / rows.length, size * 3.2);
+      const barH = rowH * 0.62, barW = W * 0.72, left = x0;
+
       rows.forEach((b, i) => {
         const parts = Math.max(1, Math.min(24, Math.round(+b.parts || 1)));
         const shade = Math.max(0, Math.min(parts, Math.round(+b.shade || 0)));
         const top = y0 + i * rowH, bot = top + barH, cw = barW / parts;
-        for (let yy = top + 4; shade && yy < bot - 2; yy += 5)                      /* the fill: hatch, clipped to the shaded cells */
-          strokes.push(straight({x: left + 2, y: yy}, {x: left + shade * cw - 2, y: yy}, 2.2, 0.28));
-        strokes.push(straight({x: left, y: top}, {x: left + barW, y: top}), straight({x: left + barW, y: top}, {x: left + barW, y: bot}),
-                     straight({x: left + barW, y: bot}, {x: left, y: bot}), straight({x: left, y: bot}, {x: left, y: top}));
-        for (let k = 1; k < parts; k++) strokes.push(straight({x: left + k * cw, y: top}, {x: left + k * cw, y: bot}));
-        /* "cut": the same bar re-divided into finer equal parts, drawn as dashed lines over
-           the original cells - thirds shown as sixths, so 2/3 and 4/6 are visibly the same bar */
+
+        /* the fill: hatch lines, clipped to the shaded cells */
+        for (let yy = top + 4; shade && yy < bot - 2; yy += 5) {
+          strokes.push(inkLine({x: left + 2, y: yy}, {x: left + shade * cw - 2, y: yy}, 2.2, 0.28));
+        }
+
+        /* the outline, four sides */
+        strokes.push(inkLine({x: left, y: top}, {x: left + barW, y: top}),
+                     inkLine({x: left + barW, y: top}, {x: left + barW, y: bot}),
+                     inkLine({x: left + barW, y: bot}, {x: left, y: bot}),
+                     inkLine({x: left, y: bot}, {x: left, y: top}));
+
+        /* the cuts between cells */
+        for (let k = 1; k < parts; k++) {
+          strokes.push(inkLine({x: left + k * cw, y: top}, {x: left + k * cw, y: bot}));
+        }
+
+        /* the finer re-cut, dashed, over the original cells */
         const cut = Math.round(+b.cut || 0);
         if (cut > parts && cut <= 48 && cut % parts === 0) {
           const fw = barW / cut;
-          for (let k = 1; k < cut; k++) if (k % (cut / parts)) {
-            for (let yy = top + 3; yy < bot - 3; yy += 9) strokes.push(straight({x: left + k * fw, y: yy}, {x: left + k * fw, y: Math.min(bot - 3, yy + 5)}, 2.2, 0.9));
+
+          for (let k = 1; k < cut; k++) {
+            if (k % (cut / parts) === 0) continue;                 /* a line the bar already has */
+            for (let yy = top + 3; yy < bot - 3; yy += 9) {
+              strokes.push(inkLine({x: left + k * fw, y: yy}, {x: left + k * fw, y: Math.min(bot - 3, yy + 5)}, 2.2, 0.9));
+            }
           }
         }
-        if (b.label) aiMarks.push({x: left + barW + size * 0.6, y: (top + bot) / 2 - size * 0.45, size: Math.max(14, size * 0.8), text: String(b.label).trim(), shown: String(b.label).length});
+
+        /* the label, e.g. 2/3, to the right of the bar */
+        if (b.label) aiMarks.push(inkLabel(left + barW + size * 0.6, (top + bot) / 2 - size * 0.45, Math.max(14, size * 0.8), String(b.label).trim()));
       });
+
       sketching = shown = true;
     } else if (Array.isArray(it.timeline) && it.timeline.length) {
-      /* ---- a timeline: one long line, a tick and a label per event, in the order given.
-         History's picture the way bars are math's - the page draws it, so it is
-         always straight, evenly spaced and legible. Labels alternate above/below. ---- */
-      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
-      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+
+      /* ---- A TIMELINE: one long line, a tick and a label per event, in the order given.
+         History's picture the way bars are math's. Labels alternate above and below. ---- */
       const ev = it.timeline.filter(e => e && typeof e === 'object').slice(0, 8);
-      const lineY = y0 + size * 2.2, left = x0 + size * 0.5, right = x0 + W - size * 0.5, n = ev.length;
-      strokes.push(straight({x: left, y: lineY}, {x: right, y: lineY}, 3));
-      strokes.push(straight({x: right - 10, y: lineY - 7}, {x: right, y: lineY}, 3), straight({x: right - 10, y: lineY + 7}, {x: right, y: lineY}, 3));
+
+      const lineY = y0 + size * 2.2;
+      const left = x0 + size * 0.5, right = x0 + W - size * 0.5, n = ev.length;
+      const fs = Math.max(13, size * 0.62);
+
+      /* the line itself, with an arrowhead at the right end */
+      strokes.push(inkLine({x: left, y: lineY}, {x: right, y: lineY}, 3));
+      strokes.push(inkLine({x: right - 10, y: lineY - 7}, {x: right, y: lineY}, 3),
+                   inkLine({x: right - 10, y: lineY + 7}, {x: right, y: lineY}, 3));
+
       ev.forEach((e, i) => {
-        const x = n === 1 ? (left + right) / 2 : left + (right - left) * i / (n - 1), up = i % 2 === 0;
-        strokes.push(straight({x, y: lineY - 9}, {x, y: lineY + 9}, 3));
-        const at = String(e.at || e.when || e.date || '').trim(), label = String(e.label || e.what || '').trim();
-        const fs = Math.max(13, size * 0.62);
-        if (at) aiMarks.push({x: x - fs * at.length * 0.28, y: up ? lineY - fs * 2.5 : lineY + fs * 0.6, size: fs, text: at, shown: at.length});
-        if (label) aiMarks.push({x: x - fs * Math.min(label.length, 18) * 0.26, y: up ? lineY - fs * 1.35 : lineY + fs * 1.75, size: fs, text: wrap(label, fs * 12, fs), shown: label.length + 20});
+        const x = n === 1 ? (left + right) / 2 : left + (right - left) * i / (n - 1);
+        const up = i % 2 === 0;
+
+        /* the tick */
+        strokes.push(inkLine({x, y: lineY - 9}, {x, y: lineY + 9}, 3));
+
+        /* the date, then the event, above or below the line */
+        const at = String(e.at || e.when || e.date || '').trim();
+        const label = String(e.label || e.what || '').trim();
+
+        if (at) aiMarks.push(inkLabel(x - fs * at.length * 0.28, up ? lineY - fs * 2.5 : lineY + fs * 0.6, fs, at));
+
+        if (label) {
+          const m = inkLabel(x - fs * Math.min(label.length, 18) * 0.26, up ? lineY - fs * 1.35 : lineY + fs * 1.75, fs, wrap(label, fs * 12, fs));
+          m.shown = label.length + 20;
+          aiMarks.push(m);
+        }
       });
-      y0 = lineY + size * 3.6; sketching = shown = true;
+
+      y0 = lineY + size * 3.6;
+      sketching = shown = true;
     } else if (it.table && typeof it.table === 'object' && Array.isArray(it.table.rows)) {
-      /* ---- a table: a real grid with a header row - a trace table for code, a conjugation
-         table for a language, atom counts for chemistry - instead of pipes in handwriting. ---- */
-      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
-      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
+
+      /* ---- A TABLE: a real grid with a header row - a trace table for code, a
+         conjugation table for a language, atom counts for chemistry. ---- */
       const head = Array.isArray(it.table.head) ? it.table.head.map(x => String(x ?? '')) : [];
       const rows = it.table.rows.filter(Array.isArray).slice(0, 10).map(r => r.map(x => String(x ?? '')));
+      const all = head.length ? [head, ...rows] : rows;
+
+      /* the grid's measurements */
       const cols = Math.max(head.length, ...rows.map(r => r.length), 1);
       const fs = Math.max(13, size * 0.66), rowH = fs * 1.9;
       const colW = Math.max(fs * 3.2, Math.min((W - size) / cols, fs * 9));
-      const all = head.length ? [head, ...rows] : rows, top = y0 + size * 0.4, left = x0 + size * 0.3;
+      const top = y0 + size * 0.4, left = x0 + size * 0.3;
       const bottom = top + rowH * all.length, rightX = left + colW * cols;
-      for (let r = 0; r <= all.length; r++) strokes.push(straight({x: left, y: top + r * rowH}, {x: rightX, y: top + r * rowH}, r === 1 && head.length ? 3.2 : 2.2));
-      for (let c = 0; c <= cols; c++) strokes.push(straight({x: left + c * colW, y: top}, {x: left + c * colW, y: bottom}, 2.2));
-      all.forEach((row, r) => row.forEach((cell, c) => { if (cell.trim()) aiMarks.push({x: left + c * colW + fs * 0.5, y: top + r * rowH + fs * 0.45, size: fs, text: cell.slice(0, 22), shown: cell.length}); }));
-      y0 = bottom + size; sketching = shown = true;
+
+      /* the rules: horizontals (the header's lower rule a little heavier), then verticals */
+      for (let r = 0; r <= all.length; r++) {
+        const heavy = r === 1 && head.length;
+        strokes.push(inkLine({x: left, y: top + r * rowH}, {x: rightX, y: top + r * rowH}, heavy ? 3.2 : 2.2));
+      }
+      for (let c = 0; c <= cols; c++) {
+        strokes.push(inkLine({x: left + c * colW, y: top}, {x: left + c * colW, y: bottom}, 2.2));
+      }
+
+      /* the cells */
+      all.forEach((row, r) => row.forEach((cell, c) => {
+        if (!cell.trim()) return;
+        aiMarks.push(inkLabel(left + c * colW + fs * 0.5, top + r * rowH + fs * 0.45, fs, cell.slice(0, 22)));
+      }));
+
+      y0 = bottom + size;
+      sketching = shown = true;
     } else if (it.fbd && typeof it.fbd === 'object') {
-      /* ---- a free-body diagram, physics' picture: a block (on an incline if an angle is
-         given) with one labelled arrow per force. weight points straight down, normal
-         stands off the surface, friction runs along it, applied/tension along it the other
-         way. The page draws it so every force is there and legible. ---- */
-      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
-      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
-      const arrow = (a, c, w = 3) => { const out = [straight(a, c, w)]; const ang = Math.atan2(c.y - a.y, c.x - a.x), L = 13;
-        for (const d of [ang + 2.6, ang - 2.6]) out.push(straight(c, {x: c.x + L * Math.cos(d), y: c.y + L * Math.sin(d)}, w)); return out; };
+
+      /* ---- A FREE-BODY DIAGRAM, physics' picture: a block (on an incline when an angle
+         is given) with one labelled arrow per force. Weight points straight down, the
+         normal stands off the surface, friction runs along it, applied/tension along it
+         the other way. Drawn by the page so every force is there and legible. ---- */
       const ang = Math.max(0, Math.min(60, +it.fbd.angle || 0)) * Math.PI / 180;
-      const forces = (Array.isArray(it.fbd.forces) ? it.fbd.forces : []).map(f => typeof f === 'string' ? {kind: f} : f).filter(f => f && f.kind).slice(0, 6);
+
+      const forces = (Array.isArray(it.fbd.forces) ? it.fbd.forces : [])
+        .map(f => typeof f === 'string' ? {kind: f} : f)
+        .filter(f => f && f.kind)
+        .slice(0, 6);
+
       const names = Object.assign({weight: 'mg', normal: 'N', friction: 'f', applied: 'F', tension: 'T', drag: 'D', lift: 'L'}, it.fbd.labels || {});
-      const S = Math.min(W, beside ? 380 : 520), blk = S * 0.13, arm = S * 0.26, fs = Math.max(14, size * 0.8);
+
+      /* sizes: smaller when the tutor is writing beside the student */
+      const S = Math.min(W, beside ? 380 : 520);
+      const blk = S * 0.13, arm = S * 0.26, fs = Math.max(14, size * 0.8);
       let cx = x0 + S * 0.5, cy = y0 + S * 0.42;
+
       /* unit directions: along the slope (down-slope to the right) and off the surface */
-      const along = {x: Math.cos(ang), y: Math.sin(ang)}, perp = {x: Math.sin(ang), y: -Math.cos(ang)};
-      /* the incline: a right triangle, high on the left, sloping down to the right; the block
-         sits ON the slope - its centre is half a block off the surface point beneath it */
+      const along = {x: Math.cos(ang), y: Math.sin(ang)};
+      const perp  = {x: Math.sin(ang), y: -Math.cos(ang)};
+
+      /* the incline: a right triangle, high on the left, sloping down to the right.
+         The block sits ON the slope - its centre is half a block off the surface. */
       if (ang > 0) {
         const run = S * 0.7, rise = run * Math.tan(ang), base = y0 + arm * 1.3 + rise;
         const bl = {x: x0 + S * 0.15, y: base}, br = {x: bl.x + run, y: base}, tl = {x: bl.x, y: base - rise};
-        strokes.push(straight(bl, br, 2.4), straight(bl, tl, 2.4), straight(tl, br, 2.4));
-        aiMarks.push({x: br.x - fs * 3.4, y: br.y - fs * 1.7, size: fs, text: Math.round(ang * 180 / Math.PI) + '°', shown: 4});
+
+        strokes.push(inkLine(bl, br, 2.4), inkLine(bl, tl, 2.4), inkLine(tl, br, 2.4));
+        aiMarks.push(inkLabel(br.x - fs * 3.4, br.y - fs * 1.7, fs, Math.round(ang * 180 / Math.PI) + '°'));
+
         const sx = bl.x + run * 0.42, sy = tl.y + (sx - bl.x) * Math.tan(ang);     /* a point on the surface */
-        cx = sx + perp.x * blk * 0.5; cy = sy + perp.y * blk * 0.5;
+        cx = sx + perp.x * blk * 0.5;
+        cy = sy + perp.y * blk * 0.5;
       }
-      /* the block, drawn as a square rotated to the surface */
-      const rot = (p) => ({x: cx + (p.x) * Math.cos(-ang) - (p.y) * Math.sin(-ang), y: cy + (p.x) * Math.sin(-ang) + (p.y) * Math.cos(-ang)});
-      const c4 = [rot({x: -blk/2, y: -blk/2}), rot({x: blk/2, y: -blk/2}), rot({x: blk/2, y: blk/2}), rot({x: -blk/2, y: blk/2})];
-      for (let k = 0; k < 4; k++) strokes.push(straight(c4[k], c4[(k + 1) % 4], 3));
-      const dirs = {weight: {x: 0, y: 1}, normal: perp, friction: {x: -along.x, y: -along.y}, applied: along, tension: {x: -along.x, y: -along.y}, drag: {x: -along.x, y: -along.y}, lift: perp};
+
+      /* the block: a square turned to lie on the surface */
+      const rot = p => ({x: cx + p.x * Math.cos(-ang) - p.y * Math.sin(-ang),
+                         y: cy + p.x * Math.sin(-ang) + p.y * Math.cos(-ang)});
+      const corner = [rot({x: -blk / 2, y: -blk / 2}), rot({x: blk / 2, y: -blk / 2}),
+                      rot({x: blk / 2, y: blk / 2}),  rot({x: -blk / 2, y: blk / 2})];
+
+      for (let k = 0; k < 4; k++) strokes.push(inkLine(corner[k], corner[(k + 1) % 4], 3));
+
+      /* one arrow per force, from the block's centre, labelled at the tip */
+      const dirs = {weight: {x: 0, y: 1}, normal: perp, friction: {x: -along.x, y: -along.y},
+                    applied: along, tension: {x: -along.x, y: -along.y}, drag: {x: -along.x, y: -along.y}, lift: perp};
+
       forces.forEach(f => {
         const d = f.dir && Array.isArray(f.dir) ? {x: +f.dir[0] || 0, y: +f.dir[1] || 0} : (dirs[f.kind] || {x: 1, y: 0});
-        const n = Math.hypot(d.x, d.y) || 1, len = arm * (f.kind === 'weight' ? 1.15 : 1);
+        const n = Math.hypot(d.x, d.y) || 1;
+        const len = arm * (f.kind === 'weight' ? 1.15 : 1);
         const tip = {x: cx + d.x / n * len, y: cy + d.y / n * len};
-        strokes.push(...arrow({x: cx, y: cy}, tip));
+
+        strokes.push(...inkArrow({x: cx, y: cy}, tip));
+
         const lbl = String(f.label || names[f.kind] || f.kind);
-        aiMarks.push({x: tip.x + (d.x / n) * fs * 0.8 - (d.x < -0.3 ? fs * lbl.length * 0.55 : 0), y: tip.y + (d.y / n) * fs * 0.8 - fs * 0.5, size: fs, text: lbl, shown: lbl.length});
+        const lx = tip.x + (d.x / n) * fs * 0.8 - (d.x < -0.3 ? fs * lbl.length * 0.55 : 0);
+        const ly = tip.y + (d.y / n) * fs * 0.8 - fs * 0.5;
+        aiMarks.push(inkLabel(lx, ly, fs, lbl));
       });
-      y0 = Math.max(cy + arm * 1.4, y0 + S * 0.62) + size; sketching = shown = true;
+
+      y0 = Math.max(cy + arm * 1.4, y0 + S * 0.62) + size;
+      sketching = shown = true;
     } else if (it.chart && typeof it.chart === 'object' && Array.isArray(it.chart.values)) {
-      /* ---- a chart from numbers - bar, line or pie - drawn exactly by the page. The
-         student asked to see their data; this is what "draw me a chart" produces. ---- */
-      const seg = (a, c, n = 10) => Array.from({length: n + 1}, (_, k) => ({x: a.x + (c.x - a.x) * k / n, y: a.y + (c.y - a.y) * k / n}));
-      const straight = (a, c, width = 2.6, alpha = 1) => ({color: AI_INK, width, alpha, ai: true, pts: seg(a, c)});
-      const vals = it.chart.values.map(v => +v || 0).slice(0, 12), labels = (it.chart.labels || []).map(x => String(x ?? '')), kind = String(it.chart.type || 'bar');
-      const S = Math.min(W, beside ? 380 : 520), CW = S, CH = S * 0.6, fs = Math.max(13, size * 0.66);
+
+      /* ---- A CHART from numbers - bar, line or pie - drawn exactly by the page.
+         "Draw me a chart of my grades" produces this. ---- */
+      const vals = it.chart.values.map(v => +v || 0).slice(0, 12);
+      const labels = (it.chart.labels || []).map(x => String(x ?? ''));
+      const kind = String(it.chart.type || 'bar');
+
+      /* the frame: smaller beside the student */
+      const S = Math.min(W, beside ? 380 : 520), CW = S, CH = S * 0.6;
+      const fs = Math.max(13, size * 0.66);
       const left = x0 + fs * 2.4, top = y0 + fs * 1.8, right = left + CW - fs * 2.4, base = top + CH;
-      if (it.chart.title) aiMarks.push({x: x0, y: y0, size: fs, text: String(it.chart.title).slice(0, 40), shown: 40});
+
+      if (it.chart.title) aiMarks.push(inkLabel(x0, y0, fs, String(it.chart.title).slice(0, 40)));
+
       if (kind === 'pie') {
-        const total = vals.reduce((a, b) => a + b, 0) || 1, cx = left + (right - left) / 2, cy = top + CH / 2, r = Math.min(right - left, CH) * 0.42;
+
+        /* PIE: one wedge per value, a label with its share at the rim */
+        const total = vals.reduce((a, b) => a + b, 0) || 1;
+        const pcx = left + (right - left) / 2, pcy = top + CH / 2, r = Math.min(right - left, CH) * 0.42;
         let a0 = -Math.PI / 2;
+
         vals.forEach((v, i) => {
-          const a1 = a0 + v / total * Math.PI * 2, arc = Array.from({length: 25}, (_, k) => { const t = a0 + (a1 - a0) * k / 24; return {x: cx + r * Math.cos(t), y: cy + r * Math.sin(t)}; });
-          strokes.push({color: AI_INK, width: 2.4, alpha: 1, ai: true, pts: arc}, straight({x: cx, y: cy}, arc[0], 2));
-          const mid = (a0 + a1) / 2, lbl = (labels[i] || '') + ' ' + Math.round(v / total * 100) + '%';
-          aiMarks.push({x: cx + (r + fs * 0.8) * Math.cos(mid) - (Math.cos(mid) < 0 ? fs * lbl.length * 0.5 : 0), y: cy + (r + fs * 0.8) * Math.sin(mid) - fs * 0.5, size: fs, text: lbl, shown: lbl.length});
+          const a1 = a0 + v / total * Math.PI * 2;
+
+          /* the arc, as 25 points, and the radius that starts the wedge */
+          const arc = Array.from({length: 25}, (_, k) => {
+            const t = a0 + (a1 - a0) * k / 24;
+            return {x: pcx + r * Math.cos(t), y: pcy + r * Math.sin(t)};
+          });
+          strokes.push({color: AI_INK, width: 2.4, alpha: 1, ai: true, pts: arc}, inkLine({x: pcx, y: pcy}, arc[0], 2));
+
+          /* the label, outside the rim, at the wedge's middle angle */
+          const mid = (a0 + a1) / 2;
+          const lbl = (labels[i] || '') + ' ' + Math.round(v / total * 100) + '%';
+          const lx = pcx + (r + fs * 0.8) * Math.cos(mid) - (Math.cos(mid) < 0 ? fs * lbl.length * 0.5 : 0);
+          aiMarks.push(inkLabel(lx, pcy + (r + fs * 0.8) * Math.sin(mid) - fs * 0.5, fs, lbl));
+
           a0 = a1;
         });
-        y0 = cy + r + fs * 2.5; sketching = shown = true;
+
+        y0 = pcy + r + fs * 2.5;
+
       } else {
+
+        /* BAR or LINE: axes first, then one bar (or point) per value */
         const max = Math.max(...vals, 1), n = vals.length, gap = (right - left) / n;
-        strokes.push(straight({x: left, y: top}, {x: left, y: base}, 2.4), straight({x: left, y: base}, {x: right, y: base}, 2.4));
-        aiMarks.push({x: left - fs * 2.2, y: top - fs * 0.5, size: fs, text: String(max), shown: 8}, {x: left - fs * 1.2, y: base - fs * 0.5, size: fs, text: '0', shown: 1});
+
+        strokes.push(inkLine({x: left, y: top}, {x: left, y: base}, 2.4), inkLine({x: left, y: base}, {x: right, y: base}, 2.4));
+        aiMarks.push(inkLabel(left - fs * 2.2, top - fs * 0.5, fs, String(max)), inkLabel(left - fs * 1.2, base - fs * 0.5, fs, '0'));
+
         const pts = [];
+
         vals.forEach((v, i) => {
-          const h = v / max * (CH - fs), xL = left + gap * i + gap * 0.2, xR = left + gap * (i + 1) - gap * 0.2, yTop = base - h;
-          if (kind === 'line') pts.push({x: (xL + xR) / 2, y: yTop});
-          else {
-            strokes.push(straight({x: xL, y: base}, {x: xL, y: yTop}, 2.4), straight({x: xL, y: yTop}, {x: xR, y: yTop}, 2.4), straight({x: xR, y: yTop}, {x: xR, y: base}, 2.4));
-            for (let yy = yTop + 5; yy < base - 2; yy += 6) strokes.push(straight({x: xL + 2, y: yy}, {x: xR - 2, y: yy}, 2, 0.25));
-            aiMarks.push({x: (xL + xR) / 2 - fs * String(v).length * 0.28, y: yTop - fs * 1.35, size: fs, text: String(v), shown: 8});
+          const h = v / max * (CH - fs);
+          const xL = left + gap * i + gap * 0.2, xR = left + gap * (i + 1) - gap * 0.2, yTop = base - h;
+
+          if (kind === 'line') {
+            pts.push({x: (xL + xR) / 2, y: yTop});
+          } else {
+            /* the bar: three sides, a light hatch fill, the value above */
+            strokes.push(inkLine({x: xL, y: base}, {x: xL, y: yTop}, 2.4), inkLine({x: xL, y: yTop}, {x: xR, y: yTop}, 2.4), inkLine({x: xR, y: yTop}, {x: xR, y: base}, 2.4));
+            for (let yy = yTop + 5; yy < base - 2; yy += 6) strokes.push(inkLine({x: xL + 2, y: yy}, {x: xR - 2, y: yy}, 2, 0.25));
+            aiMarks.push(inkLabel((xL + xR) / 2 - fs * String(v).length * 0.28, yTop - fs * 1.35, fs, String(v)));
           }
-          if (labels[i]) aiMarks.push({x: (xL + xR) / 2 - fs * Math.min(labels[i].length, 10) * 0.27, y: base + fs * 0.4, size: fs, text: labels[i].slice(0, 12), shown: 12});
+
+          /* the category under the axis */
+          if (labels[i]) aiMarks.push(inkLabel((xL + xR) / 2 - fs * Math.min(labels[i].length, 10) * 0.27, base + fs * 0.4, fs, labels[i].slice(0, 12)));
         });
+
+        /* LINE: join the points, mark each, value above */
         if (kind === 'line' && pts.length) {
-          for (let i = 1; i < pts.length; i++) strokes.push(straight(pts[i - 1], pts[i], 2.6));
-          pts.forEach((q, i) => { strokes.push(straight({x: q.x - 4, y: q.y}, {x: q.x + 4, y: q.y}, 6)); aiMarks.push({x: q.x - fs * String(vals[i]).length * 0.28, y: q.y - fs * 1.5, size: fs, text: String(vals[i]), shown: 8}); });
+          for (let i = 1; i < pts.length; i++) strokes.push(inkLine(pts[i - 1], pts[i], 2.6));
+
+          pts.forEach((q, i) => {
+            strokes.push(inkLine({x: q.x - 4, y: q.y}, {x: q.x + 4, y: q.y}, 6));
+            aiMarks.push(inkLabel(q.x - fs * String(vals[i]).length * 0.28, q.y - fs * 1.5, fs, String(vals[i])));
+          });
         }
-        y0 = base + fs * 2.6; sketching = shown = true;
+
+        y0 = base + fs * 2.6;
       }
+
+      sketching = shown = true;
     } else if (typeof it.plot === 'string') {
       /* graphs share one set of axes while plots come in a row; the axes take the whole sketch area */
       if (!plotAxes) plotAxes = makeAxes(x0, y0, W, H, it.x, it.y);
