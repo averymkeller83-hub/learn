@@ -1075,52 +1075,112 @@ function drawStroke(c, s) {
    round caps overlap into one continuous line. Light press = thin, lean in = bold. ---- */
 const segW = (s, p) => s.width * (p == null ? 1 : 0.55 + 0.9 * Math.min(1, p));
 function drawVariable(c, s, pts) {
+
+  /* the first half-segment: from the first sample to the first midpoint */
   let prev = {x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2};
-  c.lineWidth = segW(s, pts[0].p); c.beginPath(); c.moveTo(pts[0].x, pts[0].y); c.lineTo(prev.x, prev.y); c.stroke();
+
+  c.lineWidth = segW(s, pts[0].p);
+  c.beginPath(); c.moveTo(pts[0].x, pts[0].y); c.lineTo(prev.x, prev.y); c.stroke();
+
+  /* the middle: midpoint to midpoint through each sample, each piece at its own width */
   for (let i = 1; i < pts.length - 1; i++) {
     const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
-    c.lineWidth = segW(s, pts[i].p); c.beginPath(); c.moveTo(prev.x, prev.y); c.quadraticCurveTo(pts[i].x, pts[i].y, mx, my); c.stroke();
+
+    c.lineWidth = segW(s, pts[i].p);
+    c.beginPath(); c.moveTo(prev.x, prev.y); c.quadraticCurveTo(pts[i].x, pts[i].y, mx, my); c.stroke();
+
     prev = {x: mx, y: my};
   }
-  const l = pts[pts.length - 1];
-  c.lineWidth = segW(s, l.p); c.beginPath(); c.moveTo(prev.x, prev.y); c.lineTo(l.x, l.y); c.stroke();
+
+  /* the last half-segment, on to the final sample */
+  const last = pts[pts.length - 1];
+
+  c.lineWidth = segW(s, last.p);
+  c.beginPath(); c.moveTo(prev.x, prev.y); c.lineTo(last.x, last.y); c.stroke();
 }
 
 /* the first `r` of a stroke's length, ending exactly on the line - so a stroke
    can be drawn on the way a hand draws it, not popped in */
 function partialPts(pts, r) {
+
   if (pts.length < 2) return pts;
-  let total = 0; const seg = [];
-  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y); seg.push(d); total += d; }
-  let want = total * Math.max(0, Math.min(1, r)), out = [pts[0]];
+
+  /* measure every segment, and the whole */
+  let total = 0;
+  const seg = [];
+
   for (let i = 1; i < pts.length; i++) {
-    if (want >= seg[i-1]) { out.push(pts[i]); want -= seg[i-1]; continue; }
-    const t = seg[i-1] ? want / seg[i-1] : 0;
-    out.push({x: pts[i-1].x + (pts[i].x - pts[i-1].x) * t, y: pts[i-1].y + (pts[i].y - pts[i-1].y) * t});
+    const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    seg.push(d);
+    total += d;
+  }
+
+  /* walk along until the wanted length runs out; cut the last segment where it does */
+  let want = total * Math.max(0, Math.min(1, r));
+  const out = [pts[0]];
+
+  for (let i = 1; i < pts.length; i++) {
+    if (want >= seg[i - 1]) { out.push(pts[i]); want -= seg[i - 1]; continue; }
+
+    const t = seg[i - 1] ? want / seg[i - 1] : 0;
+    out.push({x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t,
+              y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t});
     break;
   }
+
+  /* a single point would not stroke at all; give it a hair of length */
   if (out.length === 1) out.push({x: out[0].x + .01, y: out[0].y});
+
   return out;
 }
 
 /* the tutor's new strokes appear in order, each drawn on over a moment, the whole
    set inside ~1.4s however many there are - the hand the videos showed */
 function animateInk(newStrokes) {
+
   const list = newStrokes.filter(st => st && st.ai && st.pts && st.pts.length > 1);
   if (!list.length) return;
-  const len = st => { let L = 0; for (let i = 1; i < st.pts.length; i++) L += Math.hypot(st.pts[i].x - st.pts[i-1].x, st.pts[i].y - st.pts[i-1].y); return L; };
+
+  /* a stroke's time on screen follows its length: 45ms to 260ms */
+  const len = st => {
+    let L = 0;
+    for (let i = 1; i < st.pts.length; i++) L += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].y - st.pts[i - 1].y);
+    return L;
+  };
   let dur = list.map(st => Math.min(260, Math.max(45, len(st) / 1.1)));
+
+  /* however many strokes, the whole reply draws inside the budget */
   const total = dur.reduce((a, b) => a + b, 0), budget = 1400;
   if (total > budget) dur = dur.map(d => d * budget / total);
-  const starts = []; let acc = 0; for (const d of dur) { starts.push(acc); acc += d; }
+
+  /* each stroke starts when the one before it ends */
+  const starts = [];
+  let acc = 0;
+  for (const d of dur) { starts.push(acc); acc += d; }
+
+  /* all hidden, then revealed frame by frame */
   list.forEach(st => { st.reveal = 0; });
   const t0 = performance.now();
+
   const step = now => {
-    const t = now - t0; let done = true;
-    list.forEach((st, i) => { const r = (t - starts[i]) / dur[i]; st.reveal = Math.max(0, Math.min(1, r)); if (r < 1) done = false; });
+    const t = now - t0;
+    let done = true;
+
+    list.forEach((st, i) => {
+      const r = (t - starts[i]) / dur[i];
+      st.reveal = Math.max(0, Math.min(1, r));
+      if (r < 1) done = false;
+    });
+
     redraw();
-    if (!done) requestAnimationFrame(step); else { list.forEach(st => { delete st.reveal; }); redraw(); dirty(); }
+
+    if (!done) { requestAnimationFrame(step); return; }
+
+    /* finished: forget the reveal flags so the strokes paint plainly from now on */
+    list.forEach(st => { delete st.reveal; });
+    redraw(); dirty();
   };
+
   requestAnimationFrame(step);
 }
 
@@ -1272,9 +1332,19 @@ cv.addEventListener('pointerdown', e => {
 });
 
 function newStroke(e) {
+
+  /* a pen shapes the line with its pressure; the highlighter and everything else keep one width */
   const pressured = e.pointerType === 'pen' && !highlighter;
-  return {color: pen, width: (pressured ? 2.6 * thickness : penWidth(e)) * (highlighter ? 4 : 1),
-          pts: [pt(e)], alpha: highlighter ? .35 : 1, ...(pressured ? {vw: true} : {})};
+
+  const base = pressured ? 2.6 * thickness : penWidth(e);
+
+  return {
+    color: pen,
+    width: base * (highlighter ? 4 : 1),
+    pts: [pt(e)],
+    alpha: highlighter ? .35 : 1,
+    ...(pressured ? {vw: true} : {}),
+  };
 }
 
 cv.addEventListener('pointermove', e => {
@@ -2428,13 +2498,19 @@ function aiBottom() {
    of their work when there is room, so the space under their problem stays
    theirs for the next line - otherwise under, as before. ---- */
 function tutorAnchor(beside) {
-  /* the STUDENT's work sets the column - the tutor's own ink must not count,
-     or its first drawing would push its next line under the page */
+
+  /* the STUDENT's work sets the column. The tutor's own ink must not count, or its
+     first drawing would push its next line under the page. */
   let box = null;
-  for (const st of strokes) { if (st.tour || st.ai) continue; for (const q of st.pts) box = union(box, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y}); }
+
+  for (const st of strokes) {
+    if (st.tour || st.ai) continue;
+    for (const q of st.pts) box = union(box, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y});
+  }
+
   for (const t of texts) if (t.text.trim()) box = union(box, textBox(t));
 
-  /* a worksheet on the page is their work too - the tutor must write beside it, never on it */
+  /* a worksheet on the page is their work too - the tutor writes beside it, never on it */
   for (const pg of pages) {
     if (pg.pic) continue;
     box = union(box, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h});
@@ -2442,16 +2518,27 @@ function tutorAnchor(beside) {
 
   /* walking alongside, the tutor writes smaller than the student - a margin note, not a
      headline - so a plan and a picture fit on one screen with the student's work */
-  const size = beside ? handSize() * 0.72 : handSize(), o = visibleOrigin(), vw = visibleWidth();
+  const size = beside ? handSize() * 0.72 : handSize();
+  const o = visibleOrigin(), vw = visibleWidth();
+
+  /* BESIDE: to the right of their work, when their work is narrow and there is room */
   if (beside && box) {
     const gap = size * 2, x = box.maxX + gap, free = (o.x + vw) - x;
-    if (box.maxX - o.x < vw * 0.55 && free >= 420)
+
+    if (box.maxX - o.x < vw * 0.55 && free >= 420) {
       return {box, size, x, y: Math.max(box.minY, aiBottom() + size * 0.8), width: Math.min(free, 760)};
+    }
   }
+
+  /* UNDER: the way a teacher marks a page - at least 640 wide, never under a panel */
   let width = box ? box.maxX - box.minX : 0;
   for (const m of aiMarks) width = Math.max(width, markBox(m).maxX - m.x);
-  width = Math.min(vw, Math.max(640, width));               /* never a skinny column, never under a panel */
-  return {box, size, x: box ? box.minX : o.x, y: Math.max(box ? box.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8), width};
+  width = Math.min(vw, Math.max(640, width));
+
+  const x = box ? box.minX : o.x;
+  const y = Math.max(box ? box.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8);
+
+  return {box, size, x, y, width};
 }
 
 function write(text, beside = false) {
@@ -2692,17 +2779,34 @@ let plotAxes = null;
    end below the visible page, pan up just enough to show them - and no more,
    so the student's own work stays in view when it can. ---- */
 function revealTutorWork(before) {
+
+  /* the box around everything the tutor just added */
   let b = null;
   for (const st of strokes.slice(before.strokes)) if (st.ai) for (const q of st.pts) b = union(b, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y});
   for (const m of aiMarks.slice(before.marks)) b = union(b, markBox(m));
   if (!b) return;
-  /* the student's newest line must stay in view: the tutor's note is about it */
-  let mine = null; for (const st of strokes) if (!st.ai && !st.tour && st.pts.length) { const q = st.pts[st.pts.length - 1]; if (!mine || q.y > mine.y) mine = q; }
-  for (const t of texts) if (t.text.trim()) { const tb = textBox(t); if (!mine || tb.maxY > mine.y) mine = {x: tb.minX, y: tb.maxY}; }
+
+  /* the student's newest line: the tutor's note is about it, so it must stay in view */
+  let mine = null;
+  for (const st of strokes) {
+    if (st.ai || st.tour || !st.pts.length) continue;
+    const q = st.pts[st.pts.length - 1];
+    if (!mine || q.y > mine.y) mine = q;
+  }
+  for (const t of texts) {
+    if (!t.text.trim()) continue;
+    const tb = textBox(t);
+    if (!mine || tb.maxY > mine.y) mine = {x: tb.minX, y: tb.maxY};
+  }
+
+  /* is the new work already on screen? */
   const bottom = b.maxY * zoom + pan.y, top = b.minY * zoom + pan.y, limit = innerHeight - 90;
   if (bottom <= limit) return;
-  let shift = Math.min(bottom - limit, Math.max(0, top - 230));      /* never push the top of the new work above the header */
-  if (mine) shift = Math.min(shift, Math.max(0, mine.y * zoom + pan.y - 250));   /* ...and never push the student's latest line off the top */
+
+  /* pan up just enough - never past the top of the new work, never past the student's line */
+  let shift = Math.min(bottom - limit, Math.max(0, top - 230));
+  if (mine) shift = Math.min(shift, Math.max(0, mine.y * zoom + pan.y - 250));
+
   if (shift > 0) { pan.y -= shift; redraw(); }
 }
 
