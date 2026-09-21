@@ -2362,16 +2362,58 @@ async function runCheck() {
   busy(true, 'Looking for the first thing to fix…');
   try {
     const v = await api('/check', {image: shot.url, work: readEl.value, context: topic(), subject: subject(), sources: sourcesFor(topic() + ' ' + readEl.value.slice(0, 600)), calc: calcOn() ? 'on' : 'off'});
-    if (v.all_correct) {
-      write("✓");
-      tutorSays("All correct — nothing to fix on this page.");
-    } else {
+    applyVerdict(v);
+    say(v.all_correct ? 'All correct.' : checksNote(v));
+  } catch (e) { say(e.message, true); }
+  busy(false);
+}
+
+
+/* ---- what the board does with a verdict. Split out of runCheck so it can be exercised with a
+   made-up verdict and no model call. ----
+   THE GUARD (2026-09-21): the model flagged lines on a page that scored 100/100. Before the
+   tutor crosses anything out, three things must hold -
+     1. the characters it calls wrong are really on the page (in the transcription the
+        student confirmed) - not something it misread out of the picture;
+     2. the line it quotes is on the page too;
+     3. its "corrected line" actually differs from what the student wrote - a fix that
+        equals the original means it found nothing.
+   When any of those fail the tutor ASKS instead of marking: no strike, no red line on
+   work that may be right. A wrong strike costs more trust than a missed one. ---- */
+function applyVerdict(v) {
+
+  /* spelling-blind, spacing-blind compare: the model's quote vs the confirmed transcription */
+  const norm = t => String(t || '').toLowerCase().replace(/\s+/g, '').replace(/[×x]/g, '*').replace(/[–—]/g, '-');
+  const page = norm(readEl.value);
+  const onPage = t => { const n = norm(t); return n.length >= 1 && page.includes(n); };
+
+  if (v.all_correct) {
+    write("✓");
+    tutorSays("All correct — nothing to fix on this page.");
+    return;
+  }
+
       /* The board shows ONLY the work done right: strike the wrong bit where it
          sits, write the corrected lines under it. The WHY goes to the chat. */
       /* a "?", "idk", or a line that stops at "=" is a student asking, not a student wrong -
          the model sometimes boxes the ? anyway, so decide from what it READ, not from the box */
       const read = String(v.line || '') + ' ' + String(v.wrong_span || '');
       const stuck = /\?|\bidk\b|\bhelp\b|=\s*$/i.test(read.trim()) || !(Array.isArray(v.wrong_box) && v.wrong_box.length === 4);
+      /* the guard: only strike what is provably on the page and provably changed */
+      const found   = onPage(v.wrong_span) || onPage(v.line);
+      const changed = norm(v.corrected_line) !== norm(v.line) || !v.corrected_line;
+      const unsure  = !stuck && !(found && changed);
+
+      if (unsure) {
+        /* ask, do not mark - and say plainly why nothing was crossed out */
+        const what = String(v.line || v.wrong_span || '').trim();
+        tutorSays((what ? `I think «${what}» might be off — ` : 'I think something here might be off — ')
+                  + String(v.problem || '').trim()
+                  + " But I can't match that to what you wrote, so I haven't marked anything. If that's what you meant, write the next step and I'll look again.");
+        say('Not sure enough to mark anything.');
+        return;
+      }
+
       const wrong = !stuck;
       if (wrong) strike(v.wrong_box);
       const steps = (Array.isArray(v.steps) ? v.steps : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
@@ -2395,10 +2437,6 @@ async function runCheck() {
 
       revealTutorWork(before);                                         /* bring the mark into view */
       tutorSays([v.problem, v.nudge].map(x => String(x || '').trim()).filter(Boolean).join(' ') + (lines.length ? (wrong ? ' I wrote the corrected work on the board.' : ' I put the first step on the board — your turn from there.') : ''), true);
-    }
-    say(v.all_correct ? 'All correct.' : checksNote(v));
-  } catch (e) { say(e.message, true); }
-  busy(false);
 }
 
 /* the whole exam at once: strike-throughs where it went wrong, then the
