@@ -1231,6 +1231,14 @@ let penDown = false;     /* pen or mouse touched the paper and has not lifted (a
    not kill the stroke. */
 function capture(e) { try { cv.setPointerCapture(e.pointerId); } catch {} }
 
+/* ---- iPadOS Scribble can swallow a Pencil stroke that looks like handwriting (WebKit
+   bug 217430), and the system's own gestures can take a finger. Claiming the raw touch
+   events on the board - not passive, defaults prevented - keeps every stroke ours.
+   Pointer Events still fire as before; this only tells the OS to stand down. ---- */
+for (const type of ['touchstart', 'touchmove', 'touchend']) {
+  cv.addEventListener(type, e => { if (e.cancelable) e.preventDefault(); }, {passive: false});
+}
+
 cv.addEventListener('pointerdown', e => {
   if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open'); progEl.classList.remove('on');   /* touching the paper closes menus */
 
