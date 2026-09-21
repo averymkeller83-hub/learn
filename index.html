@@ -3592,7 +3592,7 @@ function renderChat() {
 const wantsPicture = text => /\b(draw|sketch|diagram|picture|chart|graph|plot|map|illustrate|visuali[sz]e|show me (a|the|what|how)|make a (picture|drawing))\b/i.test(text);
 
 const hasPicture = board => Array.isArray(board)
-  && board.some(it => it && (it.svg || it.bars || it.timeline || it.table || it.fbd || it.chart || it.plot || it.draw));
+  && board.some(it => it && (it.svg || it.bars || it.timeline || it.table || it.fbd || it.chart || it.plot || it.draw || it.polyline || it.polygon));
 
 /* the two firmer asks, in order: a real diagram first, then a kind the page can always draw */
 const PICTURE_NUDGES = [
