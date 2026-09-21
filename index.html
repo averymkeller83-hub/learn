@@ -1236,8 +1236,8 @@ cv.addEventListener('pointerdown', e => {
 
   if (e.pointerType === 'touch') {
 
-    /* a palm is a big contact patch - a fingertip is not */
-    if (e.width > 45 || e.height > 45) return;
+    /* a palm is a big contact patch - a fingertip (even a large one) is not */
+    if (e.width > 80 || e.height > 80) return;
 
     /* any finger while a pen is writing, or right after it wrote, is a palm */
     if ((drawing && penSeen) || (erasing && penSeen) || performance.now() - lastPenAt < PALM_MS) return;
@@ -1246,10 +1246,6 @@ cv.addEventListener('pointerdown', e => {
     if (penSeen && touches.size === 1) return;                                  /* also a palm */
     capture(e);
     if (touches.size === 2) {                /* second finger: a pinch begins */
-
-      /* two contact points that close together are one palm, not two fingers */
-      const [ta, tb] = [...touches.values()];
-      if (Math.hypot(ta.x - tb.x, ta.y - tb.y) < 90) { touches.delete(e.pointerId); return; }
 
       if (drawing && !penSeen) {             /* the first finger was writing: keep a real stroke, drop a tap */
         if (drawing.pts.length > 3) commitStroke(); else { drawing = null; drawingId = null; }
