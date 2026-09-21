@@ -187,8 +187,21 @@
      Sections carry a colour tab; pages show their title and date.
      Open by default on a wide screen, an overlay on a narrow one.
      ============================================================ */
+  /* the scrim behind the drawer on a narrow screen: a tap on it closes the drawer */
+  #sideScrim { position: fixed; inset: 0; z-index: 29; background: rgba(26,25,23,.28); }
+  #sideScrim[hidden] { display: none; }
+
+  /* the drawer's footer: progress and settings, the rooms the ribbon hides on a small screen */
+  #side .more { display: flex; gap: 8px; padding: 8px 0 0; }
+  #side .more .act { flex: 1; }
+
+  /* the tab switch lives in the purple bar on narrow screens only */
+  #tabBtn { display: none; margin-left: 4px; padding: 6px 10px; color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
+  #tabBtn .caret { opacity: .8; }
+  @media (max-width: 860px) { #tabBtn { display: inline-block; } }
+
   #side {
-    position: fixed; top: 0; left: 0; bottom: 0; width: min(470px, 100vw); z-index: 30;
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(470px, 92vw); z-index: 30;
     box-shadow: 2px 0 12px rgba(0,0,0,.05);
     background: var(--side); border-right: 1px solid var(--edge);
     transform: translateX(-100%); transition: transform .18s ease;
@@ -518,6 +531,7 @@
 <div id="ribbon">
   <div class="rtop">
     <button class="ibtn" id="sideBtn" title="Notebooks"><svg width="20" height="20"><use href="#f-navigation"/></svg></button>
+    <button class="act" id="tabBtn" title="Home · Insert · Draw · View">Home<span class="caret"> ▾</span></button>
     <div class="app" title="A free AI teacher that can see your notes"><svg width="18" height="18"><use href="#f-notebook"/></svg>Showwork</div>
     <div class="tabs" id="tabs">
       <button class="tab" data-tab="home" aria-selected="true">Home</button>
@@ -776,11 +790,16 @@
       <button class="act add" id="pageAdd">+ Page</button>
       <button class="act add" id="examBtn" title="A new page of practice problems on your topic">✎ Practice exam</button>
       <button class="act add" id="reviewBtn2" title="Quiz me on what I've learned">🧠 Review</button>
+      <div class="more">
+        <button class="act" id="sideProgress" title="What you've studied, what you've mastered">📈 Progress</button>
+        <button class="act" id="sideSettings" title="Reading mode, calculator, your own AI key">⚙ Settings</button>
+      </div>
     </div>
   </div>
   <div class="foot" id="saveNote">Saved on this device</div>
 </aside>
 
+<div id="sideScrim" hidden></div>
 <div id="penDebug" hidden>
   <div id="penDebugStats"></div>
   <pre id="penDebugLog"></pre>
@@ -4000,13 +4019,34 @@ const nbSel = document.getElementById('nbSel');
 const WIDE = () => innerWidth >= 1100;
 function setSide(open) {
   sideEl.classList.toggle('open', open);
+
+  /* wide: the page moves over to make room; narrow: the drawer floats and a scrim sits behind it */
   document.body.classList.toggle('side-open', open && WIDE());
+  document.getElementById('sideScrim').hidden = !(open && !WIDE());
+
   redraw();
 }
-document.getElementById('sideBtn').onclick = () => {
-  if (innerWidth <= 860) return document.body.classList.toggle('tabs-open');   /* narrow: ☰ shows the tab row */
-  setSide(!sideEl.classList.contains('open'));
-};
+/* ---- ☰ is the notebook: notebooks, sections, pages, practice, review, progress, settings.
+   At every width. On a narrow screen it slides over the page and a tap outside closes it. ---- */
+document.getElementById('sideBtn').onclick = () => setSide(!sideEl.classList.contains('open'));
+
+document.getElementById('sideScrim').onclick = () => setSide(false);
+
+/* ---- on a narrow screen the ribbon tabs fold away; the current tab's name in the
+   purple bar is the switch that unfolds them (☰ used to do this) ---- */
+const tabBtn = document.getElementById('tabBtn');
+
+tabBtn.onclick = () => document.body.classList.toggle('tabs-open');
+
+/* the switch always names the tab that is up */
+new MutationObserver(() => {
+  const on = document.querySelector('.rtop .tab[aria-selected="true"]');
+  if (on) tabBtn.firstChild.textContent = on.textContent.trim();
+}).observe(document.querySelector('.rtop .tabs'), {attributes: true, subtree: true, attributeFilter: ['aria-selected']});
+
+/* the drawer's footer: two more doors, to the same rooms the ribbon opens */
+document.getElementById('sideProgress').onclick = () => { document.getElementById('progressBtn').click(); if (!WIDE()) setSide(false); };
+document.getElementById('sideSettings').onclick = () => { document.getElementById('setBtn').click(); if (!WIDE()) setSide(false); };
 document.getElementById('sideClose').onclick = () => setSide(false);
 addEventListener('resize', () => document.body.classList.toggle('side-open', sideEl.classList.contains('open') && WIDE()));
 
