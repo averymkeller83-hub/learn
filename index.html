@@ -271,6 +271,10 @@
     -webkit-user-select: text; user-select: text;
   }
   #chat.open { transform: none; opacity: 1; pointer-events: auto; }
+
+  /* while the pen is writing, the card fades back and the pen passes THROUGH it -
+     on an iPad the open card covers the lower-right quarter of the page */
+  #chat.open.ghost { opacity: .45; pointer-events: none; }
   @media (max-width: 620px) { #chat { right: 0; bottom: 0; width: 100vw; height: 100dvh; border-radius: 0; border: 0; } }
   /* the launcher: the tutor's own ink, bottom-right; × while the card is open,
      a purple dot when the tutor spoke while it was closed */
@@ -281,6 +285,8 @@
     font: 12px/1.4 ui-monospace, monospace; -webkit-user-select: text; user-select: text;
   }
   #penDebug[hidden] { display: none; }
+  #penDebug { pointer-events: none; }             /* the readout floats over the paper: the pen writes under it */
+  #penDebug button { pointer-events: auto; }       /* only Copy log takes a tap */
   #penDebugStats { white-space: pre; margin-bottom: 6px; color: #f7c59f; }
   #penDebugLog { margin: 0 0 8px; white-space: pre-wrap; word-break: break-word; }   /* lines wrap so the "→ decision" tail stays readable */
 
@@ -1278,6 +1284,19 @@ for (const type of ['touchstart', 'touchmove', 'touchend']) {
   cv.addEventListener(type, e => { if (e.cancelable) e.preventDefault(); }, {passive: false});
 }
 
+/* ---- the chat card and the pen: a pen on the paper fades the card back so it can
+   write under it; the card comes back half a second after the pen lifts, so a lift
+   between two letters does not flicker it. Fingers still tap the card normally. ---- */
+let ghostTimer = null;
+
+function ghostChat(on) {
+  clearTimeout(ghostTimer); ghostTimer = null;
+
+  if (on) return chatEl.classList.add('ghost');
+
+  ghostTimer = setTimeout(() => chatEl.classList.remove('ghost'), 450);
+}
+
 cv.addEventListener('pointerdown', e => {
   penNote(e);
   if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open'); progEl.classList.remove('on');   /* touching the paper closes menus */
@@ -1325,6 +1344,7 @@ cv.addEventListener('pointerdown', e => {
   capture(e);
   penDown = true;
   lastPenAt = performance.now();
+  if (e.pointerType === 'pen') ghostChat(true);    /* the card steps back while the pen writes */
   /* A stroke is still open from a pen-up that never arrived. Overwriting it
      below would throw it away — it was only ever painted incrementally, and
      the next redraw would erase it. Commit it first. */
@@ -1501,6 +1521,7 @@ function done(e) {
   /* a second pointer's up must not commit the pen's stroke out from under it */
   if (drawing && drawingId !== null && e.pointerId !== drawingId) return;
   if (e.type === 'pointerup') penDown = false;     /* a cancel leaves it set: the pen may still be down */
+  if (e.pointerType === 'pen') ghostChat(false);   /* the card comes back once the pen has lifted */
   if (shaping) { shaping = null; }                 /* the shape is in `drawing`; it commits below */
   if (spacing) {
     if (spacing.dy) { record({type: 'move', sel: spacing.sel, dx: 0, dy: spacing.dy}); dirty(); }
@@ -3302,6 +3323,28 @@ async function renderPdf(bytes) {
    ============================================================ */
 const chatEl = document.getElementById('chat');
 const msgsEl = document.getElementById('msgs');
+
+/* ---- a pen that lands on the open card (not on its input or a button) is writing,
+   not tapping: fade the card back and hand the same pointer to the paper. The paper's
+   own handler then captures the pointer, so the rest of the stroke follows. ---- */
+const CARD_CONTROLS = 'input, textarea, button, a, select, [contenteditable]';
+
+chatEl.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'pen' || e.target.closest(CARD_CONTROLS)) return;
+
+  e.stopPropagation();
+  ghostChat(true);
+  cv.dispatchEvent(new PointerEvent('pointerdown', e));
+}, {capture: true});
+
+/* and iPadOS must not turn that Pencil into a scroll of the message list (a scroll
+   cancels the pointer mid-stroke): stylus touches on the card are ours */
+for (const type of ['touchstart', 'touchmove']) {
+  chatEl.addEventListener(type, e => {
+    const stylus = [...e.changedTouches].some(t => t.touchType === 'stylus');
+    if (stylus && e.cancelable && !e.target.closest(CARD_CONTROLS)) e.preventDefault();
+  }, {passive: false});
+}
 const chatIn = document.getElementById('chatIn');
 const chatBtn = document.getElementById('chatBtn');
 const chatFab = document.getElementById('chatFab');       /* the bubble bottom-right: same toggle */
