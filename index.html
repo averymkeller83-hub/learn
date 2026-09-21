@@ -192,8 +192,8 @@
   #sideScrim[hidden] { display: none; }
 
   /* the drawer's footer: progress and settings, the rooms the ribbon hides on a small screen */
-  #side .more { display: flex; gap: 8px; padding: 8px 0 0; }
-  #side .more .act { flex: 1; }
+  #side .more { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 0; }
+  #side .more .act { flex: 1 1 120px; }          /* side by side when the column is wide, stacked on a phone */
 
   /* the tab switch lives in the purple bar on narrow screens only */
   #tabBtn { display: none; margin-left: 4px; padding: 6px 10px; color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
@@ -209,6 +209,8 @@
     -webkit-user-select: text; user-select: text;
   }
   #side.open { transform: none; }
+  /* on a phone the drawer is nearly the whole screen, so it steps in front of the chat launcher too */
+  @media (max-width: 860px) { #sideScrim { z-index: 32; } #side { z-index: 33; } }
   #side .nb { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px 0 12px; background: var(--accent); color: #fff; }
   #side .nb select { color: #fff; }
   #side .nb .act { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
