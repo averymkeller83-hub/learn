@@ -1285,15 +1285,17 @@ cv.addEventListener('pointerdown', e => {
   if (e.pointerType === 'touch') {
 
     /* a palm is a big contact patch - a fingertip (even a large one) is not */
-    if (e.width > 80 || e.height > 80) return;
+    if (e.width > 80 || e.height > 80) return penTag(`palm (wide: ${Math.round(e.width)}×${Math.round(e.height)}px)`);
 
     /* any finger while a pen is writing, or right after it wrote, is a palm */
-    if ((drawing && penSeen) || (erasing && penSeen) || performance.now() - lastPenAt < PALM_MS) return;
+    if ((drawing && penSeen) || (erasing && penSeen)) return penTag('palm (pen is writing)');
+    if (performance.now() - lastPenAt < PALM_MS) return penTag(`palm (pen touched ${Math.round(performance.now() - lastPenAt)}ms ago)`);
 
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
-    if (penSeen && touches.size === 1) return;                                  /* also a palm */
+    if (penSeen && touches.size === 1) return penTag('one finger after pen: waiting for a second');   /* also a palm */
     capture(e);
     if (touches.size === 2) {                /* second finger: a pinch begins */
+      penTag('pinch begins');
 
       if (drawing && !penSeen) {             /* the first finger was writing: keep a real stroke, drop a tap */
         if (drawing.pts.length > 3) commitStroke(); else { drawing = null; drawingId = null; }
@@ -1305,6 +1307,7 @@ cv.addEventListener('pointerdown', e => {
                zoom0: zoom, pan0: {...pan}};
       panFrom = null;
     } else if (touches.size === 1) {
+      penTag(fingerOn() ? 'finger ink' : 'pan (one finger, no pen yet)');
       /* one finger, no pen ever seen on this page: on a phone the finger IS the pen.
          It writes (or erases, or lassos - whatever tool is up); two fingers pan and zoom. */
       if (fingerOn() && (tool === 'pen' || tool === 'eraser' || tool === 'select' || tool === 'shape')) {
@@ -1396,7 +1399,7 @@ cv.addEventListener('pointermove', e => {
   const fingerInk = fingerOn() && e.pointerType === 'touch' && !penSeen && touches.size === 1 && e.pointerId === (drawingId ?? -1) && drawing;
   const fingerTool = fingerOn() && e.pointerType === 'touch' && !penSeen && touches.size === 1 && (lasso || erasing || shaping);
   if (e.pointerType === 'touch' && !fingerInk && !fingerTool) {
-    if (!touches.has(e.pointerId)) return;   /* a palm we chose to ignore */
+    if (!touches.has(e.pointerId)) return penTag('ignored (a palm, or dropped at touch-down)');   /* a palm we chose to ignore */
     touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
 
     if (pinch && touches.size === 2) {
@@ -1410,16 +1413,21 @@ cv.addEventListener('pointermove', e => {
       const by = (pinch.mid.y - pinch.pan0.y) / pinch.zoom0;
       pan = {x: mid.x - bx * zoom, y: mid.y - by * zoom};
       flashZoom(mid.x, mid.y);
+      penTag(`pinch: zoom ${Math.round(zoom * 100)}% (fingers ${Math.round(dist)}px apart)`);
       return redraw();
     }
     if (panFrom) {
       pan = {x: e.clientX - panFrom.x, y: e.clientY - panFrom.y};
+      penTag('pan (one finger)');
       return redraw();
     }
+    penTag(touches.size === 1 ? 'one finger after pen: nothing' : 'touch move, no gesture');
     return;
   }
 
-  if (e.pointerType !== 'touch') lastPenAt = performance.now();   /* a finger writing is not a pen: it must not turn the next finger into a palm */
+  /* a finger writing is not a pen, and a Pencil HOVERING (buttons = 0, newer iPads) has not touched:
+     neither may turn the next finger into a palm - only real pen contact re-arms the timer */
+  if (e.pointerType !== 'touch' && e.buttons) lastPenAt = performance.now();
   if (shaping) { drawing = shapeStroke(shaping.from, pt(e)); return redraw(); }
   if (spacing) {
     const y = pt(e).y, dy = y - spacing.last;
@@ -1850,6 +1858,21 @@ const penDebugOn = () => { try { return localStorage.getItem('showwork.pendebug'
 const penStats = {pen: {down: 0, move: 0, up: 0, cancel: 0, samples: 0}, touch: {down: 0, move: 0, up: 0, cancel: 0, samples: 0}, mouse: {down: 0, move: 0, up: 0, cancel: 0, samples: 0}};
 const penLog = [];
 
+/* ---- the verdict: what the app decided to DO with the last touch. The raw event
+   log alone reads "touch move move move" during a pinch, which looks like the page
+   is being moved - this line says "zoom 118%" or "palm (wide)" instead. ---- */
+let penVerdict = '';
+let penLogged = null;          /* the event whose line sits at the top of the log, if it was logged */
+
+function penTag(what) {
+  penVerdict = what;
+  if (!penDebugOn()) return;
+
+  /* pin the verdict onto the line that was just logged for this event */
+  if (penLogged && penLog.length) penLog[0] = penLog[0].replace(/ → .*$/, '') + ' → ' + what;
+  penShow();
+}
+
 function penNote(e, extra = '') {
   if (!penDebugOn()) return;
 
@@ -1861,17 +1884,24 @@ function penNote(e, extra = '') {
   kind.samples += n;
 
   /* keep the last 30, newest first (every 5th move, every other event) */
+  penLogged = null;
   if (evt !== 'move' || kind.move % 5 === 0) {
     penLog.unshift(`${new Date().toISOString().slice(11, 23)} ${e.pointerType.padEnd(5)} ${evt.padEnd(6)} p=${(e.pressure || 0).toFixed(2)} w=${Math.round(e.width || 0)} n=${n} ${extra}`);
     penLog.length = Math.min(penLog.length, 30);
+    penLogged = e;
   }
 
-  /* show it */
+  penShow();
+}
+
+/* paint the stats block and the log */
+function penShow() {
   const st = document.getElementById('penDebugStats');
   st.textContent = ['pen', 'touch', 'mouse'].map(k => {
     const c = penStats[k];
     return `${k.padEnd(5)} down ${c.down}  move ${c.move}  up ${c.up}  cancel ${c.cancel}  samples ${c.samples}`;
-  }).join('\n') + `\ndrawing ${drawing ? 'yes' : 'no'}  penDown ${penDown}  penSeen ${penSeen}  touches ${touches.size}  strokes ${strokes.length}`;
+  }).join('\n') + `\ndrawing ${drawing ? 'yes' : 'no'}  penDown ${penDown}  penSeen ${penSeen}  touches ${touches.size}  strokes ${strokes.length}`
+     + `\nlast decision: ${penVerdict || '-'}`;
   document.getElementById('penDebugLog').textContent = penLog.join('\n');
 }
 
