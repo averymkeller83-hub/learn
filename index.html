@@ -259,6 +259,16 @@
   @media (max-width: 620px) { #chat { right: 0; bottom: 0; width: 100vw; height: 100dvh; border-radius: 0; border: 0; } }
   /* the launcher: the tutor's own ink, bottom-right; × while the card is open,
      a purple dot when the tutor spoke while it was closed */
+  /* ---- pen diagnostics: a small readout, bottom-left, only when switched on ---- */
+  #penDebug {
+    position: fixed; left: 12px; bottom: 12px; z-index: 40; width: 340px; max-height: 46vh; overflow: auto;
+    background: rgba(26,25,23,.92); color: #fbfaf7; border-radius: 10px; padding: 10px 12px;
+    font: 12px/1.4 ui-monospace, monospace; -webkit-user-select: text; user-select: text;
+  }
+  #penDebug[hidden] { display: none; }
+  #penDebugStats { white-space: pre; margin-bottom: 6px; color: #f7c59f; }
+  #penDebugLog { margin: 0 0 8px; white-space: pre; }
+
   #chatFab {
     position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; z-index: 31; border: 0; border-radius: 50%;
     background: var(--ai-ink); color: #fff; cursor: pointer; display: grid; place-items: center;
@@ -699,6 +709,7 @@
   <h2>Settings</h2>
   <label class="opt"><input type="checkbox" id="readingOpt"> <span><b>Reading mode</b> — a typeface made for dyslexia, wider letter and line spacing, a warmer page. Changes every word on screen, including the tutor's handwriting.</span></label>
   <label class="opt"><input type="checkbox" id="fingerOpt"> <span><b>Draw with a finger</b> — for a phone with no pen. Off, only a pen writes: fingers pan and zoom, and a resting palm never leaves a mark.</span></label>
+  <label class="opt"><input type="checkbox" id="penDebugOpt"> <span><b>Pen diagnostics</b> — a small live readout of what the pen and fingers send (for chasing a dropped stroke). Off unless you are debugging.</span></label>
   <label class="opt"><input type="checkbox" id="calcOpt" checked> <span><b>Calculator</b> — typing <code>3*(4+5) =</code> in a text box fills in the answer, and the tutor may do arithmetic. Turn it off to make the student do every number.</span></label>
   <h2 style="margin-top:14px">Your own AI</h2>
   <p>Showwork's shared key is Gemini, and it's free — a Google account gets you one in a tap at
@@ -770,6 +781,11 @@
   <div class="foot" id="saveNote">Saved on this device</div>
 </aside>
 
+<div id="penDebug" hidden>
+  <div id="penDebugStats"></div>
+  <pre id="penDebugLog"></pre>
+  <button type="button" class="act" id="penDebugCopy">Copy log</button>
+</div>
 <aside id="chat">
   <header>
     <div class="who"><span class="ava"><svg><use href="#f-pen"/></svg></span><div><b>Tutor</b><small>can see this page</small></div></div>
@@ -1073,7 +1089,9 @@ function drawStroke(c, s) {
 /* ---- a pressure stroke: the width follows the hand. Each smoothed segment
    (midpoint to midpoint through the sample) is stroked at its own width; the
    round caps overlap into one continuous line. Light press = thin, lean in = bold. ---- */
-const segW = (s, p) => s.width * (p == null ? 1 : 0.55 + 0.9 * Math.min(1, p));
+/* light press = 70% of the base width, a firm press = 130%: the first mm of a stroke
+   used to come out at 55% and read as "not detected" */
+const segW = (s, p) => s.width * (p == null ? 1 : 0.7 + 0.6 * Math.min(1, p));
 function drawVariable(c, s, pts) {
 
   /* the first half-segment: from the first sample to the first midpoint */
@@ -1240,6 +1258,7 @@ for (const type of ['touchstart', 'touchmove', 'touchend']) {
 }
 
 cv.addEventListener('pointerdown', e => {
+  penNote(e);
   if (!WIDE()) setSide(false); exportMenu.classList.remove('open'); symMenu.classList.remove('open'); paperPanel.classList.remove('on'); colorMenu.classList.remove('open'); progEl.classList.remove('on');   /* touching the paper closes menus */
 
   if (e.pointerType === 'touch') {
@@ -1352,6 +1371,7 @@ function newStroke(e) {
 }
 
 cv.addEventListener('pointermove', e => {
+  penNote(e);
   const fingerInk = fingerOn() && e.pointerType === 'touch' && !penSeen && touches.size === 1 && e.pointerId === (drawingId ?? -1) && drawing;
   const fingerTool = fingerOn() && e.pointerType === 'touch' && !penSeen && touches.size === 1 && (lasso || erasing || shaping);
   if (e.pointerType === 'touch' && !fingerInk && !fingerTool) {
@@ -1435,6 +1455,7 @@ cv.addEventListener('pointermove', e => {
 });
 
 function done(e) {
+  penNote(e, drawing ? 'stroke open' : '');
   if (fingerOn() && e.pointerType === 'touch' && !penSeen && (drawing || lasso || erasing || shaping) && (drawingId === null || drawingId === e.pointerId)) {
     touches.delete(e.pointerId);            /* the finger that was writing lifts: commit exactly as a pen would */
   } else if (e.pointerType === 'touch') {
@@ -1796,6 +1817,57 @@ textEdit.addEventListener('keydown', e => {
    and the tutor is told to make the student do the numbers.
    ============================================================ */
 const calcOn = () => { try { return localStorage.getItem('showwork.calc') !== 'off'; } catch { return true; } };
+
+/* ============================================================
+   PEN DIAGNOSTICS — when a stroke goes missing on a real iPad there is no
+   way to see why from here. Switched on in Settings, this counts every
+   pointer event by type and keeps the last 30 with pressure, contact size
+   and coalesced-sample count, so a screenshot tells the whole story.
+   ============================================================ */
+const penDebugOn = () => { try { return localStorage.getItem('showwork.pendebug') === 'on'; } catch { return false; } };
+
+const penStats = {pen: {down: 0, move: 0, up: 0, cancel: 0, samples: 0}, touch: {down: 0, move: 0, up: 0, cancel: 0, samples: 0}, mouse: {down: 0, move: 0, up: 0, cancel: 0, samples: 0}};
+const penLog = [];
+
+function penNote(e, extra = '') {
+  if (!penDebugOn()) return;
+
+  /* count it */
+  const kind = penStats[e.pointerType] || penStats.mouse;
+  const evt = e.type.replace('pointer', '');
+  if (evt in kind) kind[evt]++;
+  const n = e.getCoalescedEvents ? e.getCoalescedEvents().length : 0;
+  kind.samples += n;
+
+  /* keep the last 30, newest first (every 5th move, every other event) */
+  if (evt !== 'move' || kind.move % 5 === 0) {
+    penLog.unshift(`${new Date().toISOString().slice(11, 23)} ${e.pointerType.padEnd(5)} ${evt.padEnd(6)} p=${(e.pressure || 0).toFixed(2)} w=${Math.round(e.width || 0)} n=${n} ${extra}`);
+    penLog.length = Math.min(penLog.length, 30);
+  }
+
+  /* show it */
+  const st = document.getElementById('penDebugStats');
+  st.textContent = ['pen', 'touch', 'mouse'].map(k => {
+    const c = penStats[k];
+    return `${k.padEnd(5)} down ${c.down}  move ${c.move}  up ${c.up}  cancel ${c.cancel}  samples ${c.samples}`;
+  }).join('\n') + `\ndrawing ${drawing ? 'yes' : 'no'}  penDown ${penDown}  penSeen ${penSeen}  touches ${touches.size}  strokes ${strokes.length}`;
+  document.getElementById('penDebugLog').textContent = penLog.join('\n');
+}
+
+{
+  const opt = document.getElementById('penDebugOpt'), box = document.getElementById('penDebug');
+
+  const apply = () => { box.hidden = !penDebugOn(); };
+  opt.checked = penDebugOn();
+  apply();
+
+  opt.onchange = () => { try { localStorage.setItem('showwork.pendebug', opt.checked ? 'on' : 'off'); } catch {} apply(); };
+
+  document.getElementById('penDebugCopy').onclick = () => {
+    const text = document.getElementById('penDebugStats').textContent + '\n' + penLog.join('\n');
+    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+  };
+}
 
 /* ---- "Draw with a finger" - off unless the student turns it on in Settings.
    With it off, only a pen inks; every touch is a palm or a pan. ---- */
