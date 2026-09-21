@@ -2,8 +2,13 @@ name = "showwork"
 main = "worker.js"
 compatibility_date = "2026-09-01"
 
-# showwork.avery-keller.net — Cloudflare creates the DNS record for a custom domain.
-routes = [{ pattern = "showwork.avery-keller.net", custom_domain = true }]
+# learn.avery-keller.net is the name now (2026-09-21); the old showwork.avery-keller.net keeps answering
+# until Avery says drop it. Cloudflare creates the DNS records for custom domains. The Worker itself
+# stays named "showwork" — its secrets (GEMINI_API_KEY) and D1 binding live on that name.
+routes = [
+  { pattern = "learn.avery-keller.net",    custom_domain = true },
+  { pattern = "showwork.avery-keller.net", custom_domain = true },
+]
 
 # index.html is imported as a string in worker.js — one copy of the board, no assets folder.
 [[rules]]

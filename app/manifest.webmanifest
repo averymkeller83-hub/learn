@@ -1,6 +1,6 @@
 {
-  "name": "Showwork — a free AI teacher that can see your notes",
-  "short_name": "Showwork",
+  "name": "Learn — a free AI teacher that can see your notes",
+  "short_name": "Learn",
   "description": "Handwrite, type or import your notes; a tutor that sees the page checks your work, teaches step by step, and draws on the board.",
   "start_url": "/",
   "scope": "/",

@@ -1,8 +1,10 @@
-# Showwork
+# Learn
+
+**L**ook · **E**xplain · **A**ttempt · **R**evise · **N**ext — the loop the letters spell, and the way the tutor works: read the problem, ask it to teach with a `?`, write one step in ink, let Check mark the slip in the margin, then the next step.
 
 **A free AI teacher that can see your notes.**
 
-Live: https://showwork.avery-keller.net
+Live: https://learn.avery-keller.net  (the old showwork.avery-keller.net still answers)
 
 You handwrite (or type, or import) on a page. A tutor that can see the page
 checks your work, crosses out the exact bit that's wrong, writes the corrected

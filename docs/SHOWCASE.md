@@ -1,16 +1,16 @@
 # Handshake AI Showcase — the submission
 
-Live URL: **https://showwork.avery-keller.net**
+Live URL: **https://learn.avery-keller.net**
 Repo: **https://github.com/averymkeller83-hub/showwork**
 
 ## Title
-Showwork
+Learn
 
 ## Tagline (for the banner image)
 **A free AI teacher that can see your notes.**
 
 ## Description (~100 words — the field on Handshake)
-Showwork is a notebook with a teacher inside it. You handwrite your work the way
+Learn is a notebook with a teacher inside it. You handwrite your work the way
 you would on paper; it reads your handwriting, crosses out the first thing that's
 wrong, writes the correction on the page, and explains why in the chat. Say
 "teach me" anything and it asks what you already know, puts a plan on the board,

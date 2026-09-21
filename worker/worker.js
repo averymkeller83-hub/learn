@@ -1,4 +1,4 @@
-/*  Showwork — the Cloudflare Worker. The dev server (../server.py), ported.
+/*  Learn — the Cloudflare Worker. The dev server (../server.py), ported.
 
     THE WHOLE PROGRAM IN THREE STEPS:
       1. GET  /            -> hand over the board (index.html, bundled in).
@@ -59,7 +59,7 @@ export default {
     const quota = await spend(env, request);
     if (quota && quota.over) {
       return json(429, { error: "out_of_checks", checks_left: 0, message:
-        `That's ${DAILY_FREE} free checks today on Showwork's shared key. Add your own free Gemini key in Settings (⚙) ` +
+        `That's ${DAILY_FREE} free checks today on Learn's shared key. Add your own free Gemini key in Settings (⚙) ` +
         `for unlimited use - it takes one tap at aistudio.google.com/apikey - or come back tomorrow. The board still works.` });
     }
     const left = quota ? quota.left : null;
@@ -212,7 +212,7 @@ async function fetchPage(target) {
     return json(400, { error: "bad_url", message: "Only public http(s) links can be added." });
   let raw;
   try {
-    const res = await fetch(t.href, { headers: { "User-Agent": "Mozilla/5.0 (Showwork source fetch)" }, redirect: "follow" });
+    const res = await fetch(t.href, { headers: { "User-Agent": "Mozilla/5.0 (Learn source fetch)" }, redirect: "follow" });
     if (!res.ok) return json(502, { error: "fetch_failed", message: `That page answered ${res.status}.` });
     raw = (await res.text()).slice(0, 1_500_000);
   } catch (e) { return json(502, { error: "fetch_failed", message: String(e.message).slice(0, 200) }); }

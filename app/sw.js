@@ -1,7 +1,7 @@
-/* Showwork service worker — the app shell opens even offline.
+/* Learn service worker — the app shell opens even offline.
    Network first for the page (so a new deploy shows up on the next open),
    cache as the fallback. Model calls are never cached. */
-const CACHE = 'showwork-shell-v1';
+const CACHE = 'learn-shell-v1';
 const SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];   /* prompts.json is never cached: a stale copy drops new subjects */
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

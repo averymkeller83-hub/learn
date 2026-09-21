@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  Showwork — a notebook you handwrite in, with a tutor built in.
+  Learn — a notebook you handwrite in, with a tutor built in.
 
   THE WHOLE PAGE IN SIX STEPS:
     1. Notebooks hold sections, sections hold pages. Every page is a board.
@@ -23,14 +23,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Showwork</title>
+<title>Learn</title>
 <meta name="description" content="A free AI teacher that can see your notes.">
 <meta name="theme-color" content="#7719aa">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Showwork">
+<meta name="apple-mobile-web-app-title" content="Learn">
 <style>
   /* ============================================================
      THE PALETTE — muted, paper-like. The AI's amber is reserved:
@@ -545,7 +545,7 @@
   <div class="rtop">
     <button class="ibtn" id="sideBtn" title="Notebooks"><svg width="20" height="20"><use href="#f-navigation"/></svg></button>
     <button class="act" id="tabBtn" title="Home · Insert · Draw · View">Home<span class="caret"> ▾</span></button>
-    <div class="app" title="A free AI teacher that can see your notes"><svg width="18" height="18"><use href="#f-notebook"/></svg>Showwork</div>
+    <div class="app" title="LEARN — Look · Explain · Attempt · Revise · Next. A free AI teacher that can see your notes."><svg width="18" height="18"><use href="#f-notebook"/></svg>Learn</div>
     <div class="tabs" id="tabs">
       <button class="tab" data-tab="home" aria-selected="true">Home</button>
       <button class="tab" data-tab="insert">Insert</button>
@@ -717,8 +717,8 @@
   <h2>Import from OneNote</h2>
   <div id="onSetup">
     <p>Sign in with your Microsoft account and pick a notebook; its sections and pages come in here, with their text and pictures.</p>
-    <p class="fine" id="onNeed">Showwork needs a Microsoft app registration to sign people in. One-time, free, five minutes:
-      <b>portal.azure.com → App registrations → New</b> · name it Showwork · account type <b>Personal Microsoft accounts and any org</b> ·
+    <p class="fine" id="onNeed">Learn needs a Microsoft app registration to sign people in. One-time, free, five minutes:
+      <b>portal.azure.com → App registrations → New</b> · name it Learn · account type <b>Personal Microsoft accounts and any org</b> ·
       platform <b>Single-page application</b>, redirect URI <code id="onRedirect"></code> · under <b>API permissions</b> add Microsoft Graph
       <b>Notes.Read</b> and <b>User.Read</b>. Paste the <b>Application (client) ID</b> below.</p>
     <div class="row"><input id="msClientIn" placeholder="Application (client) ID" autocomplete="off" spellcheck="false"><button class="act" id="msSave">Save</button></div>
@@ -740,10 +740,10 @@
   <label class="opt"><input type="checkbox" id="penDebugOpt"> <span><b>Pen diagnostics</b> — a small live readout of what the pen and fingers send (for chasing a dropped stroke). Off unless you are debugging.</span></label>
   <label class="opt"><input type="checkbox" id="calcOpt" checked> <span><b>Calculator</b> — typing <code>3*(4+5) =</code> in a text box fills in the answer, and the tutor may do arithmetic. Turn it off to make the student do every number.</span></label>
   <h2 style="margin-top:14px">Your own AI</h2>
-  <p>Showwork's shared key is Gemini, and it's free — a Google account gets you one in a tap at
+  <p>Learn's shared key is Gemini, and it's free — a Google account gets you one in a tap at
      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
      Bring your own and every check and chat runs on <b>your</b> account.</p>
-  <p class="fine">Keys are kept only in this browser and sent straight to the provider. They never touch Showwork's server.</p>
+  <p class="fine">Keys are kept only in this browser and sent straight to the provider. They never touch Learn's server.</p>
   <div class="row" style="margin-bottom:8px">
     <select id="providerSel">
       <option value="gemini">Google Gemini — free tier</option>
@@ -2457,7 +2457,7 @@ async function post(path, body) {
    Google won't let a person's sign-in pay for Gemini calls (quota is a
    Cloud project's, not a login's). The honest version is this: paste
    your own free key, and the page calls Gemini DIRECTLY from the
-   browser with it. The key never touches Showwork's server. Without a
+   browser with it. The key never touches Learn's server. Without a
    key, calls go to our server, on our quota, exactly as before.
    api() is the fork; everything above it can't tell the difference.
    ============================================================ */
@@ -2689,7 +2689,7 @@ document.getElementById('keySave').onclick = () => {
 };
 document.getElementById('keyClear').onclick = () => {
   try { localStorage.removeItem('showwork.key:' + providerId()); if (providerId() === 'gemini') localStorage.removeItem('showwork.key'); } catch {}
-  keyState(); say("Back to Showwork's shared key.");
+  keyState(); say("Back to Learn's shared key.");
 };
 function keyState() {
   const P = provider(), k = userKey();
@@ -2698,7 +2698,7 @@ function keyState() {
   document.getElementById('keyState').textContent = P.local
     ? `Calls go to ${P.model} on this machine. Nothing leaves it.`
     : (k ? `A key ending in …${k.slice(-4)} is in use. Calls go straight from this browser to ${P.name}, never through our server.`
-         : `No ${P.name} key saved — checks and chat use Showwork's shared Gemini key, which has a daily limit.`);
+         : `No ${P.name} key saved — checks and chat use Learn's shared Gemini key, which has a daily limit.`);
   document.getElementById('providerNote').textContent = P.local
     ? `Run it with: OLLAMA_ORIGINS=* ollama serve — and pull a vision model (${P.model}).`
     : `Get a key at ${P.where}.${P.free ? ' Free.' : ' Calls are billed to your account.'} Model: ${P.model}.`;

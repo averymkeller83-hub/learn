@@ -1,4 +1,4 @@
-"""Showwork — the dev server. Small on purpose.
+"""Learn — the dev server. Small on purpose.
 
 THE WHOLE PROGRAM IN FOUR STEPS:
   1. Serve index.html (the board) to the browser.
@@ -245,7 +245,7 @@ class Board(SimpleHTTPRequestHandler):
            host.startswith(("127.", "10.", "192.168.", "169.254.", "0.")) or host.endswith(".local"):
             return self.reply(400, {"error": "bad_url", "message": "Only public http(s) links can be added."})
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Showwork source fetch)"})
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Learn source fetch)"})
             with urllib.request.urlopen(req, timeout=20) as resp:
                 raw = resp.read(1_500_000).decode("utf-8", "replace")
         except Exception as e:                      # noqa: BLE001 - surface it
@@ -405,6 +405,6 @@ if __name__ == "__main__":
         print("!! GEMINI_API_KEY is not set — the board will draw, but")
         print("!! checking will refuse instead of failing quietly.\n")
 
-    print(f"Showwork on http://localhost:{PORT}  ({CHECK_BUDGET} checks)")
+    print(f"Learn on http://localhost:{PORT}  ({CHECK_BUDGET} checks)")
     HTTPServer.allow_reuse_address = True      # stop/start without the TIME_WAIT sulk
     HTTPServer(("", PORT), Board).serve_forever()
