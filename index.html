@@ -276,6 +276,9 @@
   /* while the pen is writing, the card fades back and the pen passes THROUGH it -
      on an iPad the open card covers the lower-right quarter of the page */
   #chat.open.ghost { opacity: .45; pointer-events: none; }
+
+  /* on an iPad the card is a margin, not a wall: narrower and half the height */
+  @media (min-width: 621px) and (max-width: 1100px) { #chat { width: min(340px, calc(100vw - 32px)); height: min(56vh, 640px); } }
   @media (max-width: 620px) { #chat { right: 0; bottom: 0; width: 100vw; height: 100dvh; border-radius: 0; border: 0; } }
   /* the launcher: the tutor's own ink, bottom-right; × while the card is open,
      a purple dot when the tutor spoke while it was closed */
@@ -2242,6 +2245,7 @@ function apply(a, dir) {
 document.getElementById('clear').onclick = () => {
   if (editing) commitText();
   strokes.length = 0; texts.length = 0; aiMarks.length = 0; aiLines.length = 0; history.length = 0; redoStack.length = 0;
+  sinceTutor = {s: 0, t: 0};
   setSelection(null); say(''); showRead.hidden = true;
   dirty();
 };
@@ -2747,11 +2751,43 @@ function handSize() {
   return Math.max(14, Math.min(72, hs[hs.length >> 1] * 0.95));
 }
 
-/* where the AI's writing ends, so the next note goes under it */
-function aiBottom() {
+/* ---- where the tutor's writing ends, so the next note goes under it - but only the
+   notes that share the column [x0, x1]. A note the tutor wrote far off to one side an
+   hour ago must not push today's note further down the page. ---- */
+function aiBottomIn(x0, x1) {
   let b = -Infinity;
-  for (const m of aiMarks) b = Math.max(b, m.y + m.text.split('\n').length * m.size * 1.35);
+
+  for (const m of aiMarks) {
+    const right = markBox(m).maxX;
+
+    /* a note off to the side of this column does not count */
+    if (right < x0 || m.x > x1) continue;
+
+    b = Math.max(b, m.y + m.text.split('\n').length * m.size * 1.35);
+  }
+
   return b;
+}
+
+/* the old whole-page version, for anything that still wants it */
+function aiBottom() { return aiBottomIn(-Infinity, Infinity); }
+
+/* ---- the tutor's column follows the STUDENT down the page. This remembers how much of
+   their ink existed when the tutor last spoke, so the next note anchors to what they
+   wrote SINCE - not to everything on the page. Reset when the page is cleared or changed. ---- */
+let sinceTutor = {s: 0, t: 0};
+
+function tutorSpoke() { sinceTutor = {s: strokes.length, t: texts.length}; }
+
+/* ---- the open chat card, in paper coordinates, or null when it is closed. On an iPad it
+   floats over the lower-right quarter of the page; the tutor must not write under it. ---- */
+function cardBox() {
+  if (!chatEl.classList.contains('open')) return null;
+
+  const r = chatEl.getBoundingClientRect();
+
+  return {minX: (r.left - pan.x) / zoom, minY: (r.top - pan.y) / zoom,
+          maxX: (r.right - pan.x) / zoom, maxY: (r.bottom - pan.y) / zoom};
 }
 
 /* the AI's answer, appearing the way a person writes it: below the work
@@ -2764,33 +2800,57 @@ function aiBottom() {
 function tutorAnchor(beside) {
 
   /* the STUDENT's work sets the column. The tutor's own ink must not count, or its
-     first drawing would push its next line under the page. */
-  let box = null;
+     first drawing would push its next line under the page. Two boxes: everything they
+     have written (whole), and only what they wrote since the tutor last spoke (recent). */
+  let whole = null, recent = null;
 
-  for (const st of strokes) {
-    if (st.tour || st.ai) continue;
-    for (const q of st.pts) box = union(box, {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y});
-  }
+  strokes.forEach((st, i) => {
+    if (st.tour || st.ai) return;
 
-  for (const t of texts) if (t.text.trim()) box = union(box, textBox(t));
+    for (const q of st.pts) {
+      const dot = {minX: q.x, minY: q.y, maxX: q.x, maxY: q.y};
+      whole = union(whole, dot);
+      if (i >= sinceTutor.s) recent = union(recent, dot);
+    }
+  });
+
+  texts.forEach((t, i) => {
+    if (!t.text.trim()) return;
+    whole = union(whole, textBox(t));
+    if (i >= sinceTutor.t) recent = union(recent, textBox(t));
+  });
 
   /* a worksheet on the page is their work too - the tutor writes beside it, never on it */
   for (const pg of pages) {
     if (pg.pic) continue;
-    box = union(box, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h});
+    whole = union(whole, {minX: pg.x, minY: pg.y, maxX: pg.x + pg.w, maxY: pg.y + pg.h});
   }
+
+  /* follow their newest line when there is one; otherwise the page as a whole */
+  let box = recent || whole;
 
   /* walking alongside, the tutor writes smaller than the student - a margin note, not a
      headline - so a plan and a picture fit on one screen with the student's work */
   const size = beside ? handSize() * 0.72 : handSize();
-  const o = visibleOrigin(), vw = visibleWidth();
+  const o = visibleOrigin(), vw = visibleWidth(true);      /* the card is checked as a rectangle below */
 
   /* BESIDE: to the right of their work, when their work is narrow and there is room */
   if (beside && box) {
-    const gap = size * 2, x = box.maxX + gap, free = (o.x + vw) - x;
+    const gap = size * 2, x = box.maxX + gap;
+    let free = (o.x + vw) - x;
+
+    /* the chat card takes its share of the right-hand side while it is open */
+    const card = cardBox();
+
+    if (card && card.minX < x + free && card.maxY > box.minY && card.minY < box.minY + size * 10) {
+      free = Math.min(free, card.minX - gap - x);
+    }
 
     if (box.maxX - o.x < vw * 0.55 && free >= 420) {
-      return {box, size, x, y: Math.max(box.minY, aiBottom() + size * 0.8), width: Math.min(free, 760)};
+      const width = Math.min(free, 760);
+      const y = Math.max(box.minY, aiBottomIn(x, x + width) + size * 0.8);
+
+      return {box, size, x, y, width};
     }
   }
 
@@ -2800,7 +2860,9 @@ function tutorAnchor(beside) {
   width = Math.min(vw, Math.max(640, width));
 
   const x = box ? box.minX : o.x;
-  const y = Math.max(box ? box.maxY + size * 1.2 : o.y, aiBottom() + size * 0.8);
+
+  /* under their newest line - pushed down only by tutor notes that share this column */
+  const y = Math.max(box ? box.maxY + size * 1.2 : o.y, aiBottomIn(x, x + width) + size * 0.8);
 
   return {box, size, x, y, width};
 }
@@ -2813,6 +2875,7 @@ function writeAt(text, x, y, width) {
   const size = handSize() * 0.72;
   const mark = {x, y, size, text: wrap(text, width, size), shown: 0};
   aiMarks.push(mark);
+  tutorSpoke();
 
   /* typed on at the same pace as any other note */
   const total = mark.text.length, CPS = 45, t0 = performance.now();
@@ -2834,6 +2897,7 @@ function write(text, beside = false) {
     shown: 0,
   };
   aiMarks.push(mark);
+  tutorSpoke();
 
   const total = mark.text.length, CPS = 45, t0 = performance.now();
   const step = now => {
@@ -2891,6 +2955,7 @@ function renderBoard(board, beside = false) {
     for (const m of aiMarks) if (!/^\d{1,2}[.)]\s/.test(m.text.trim())) m.alpha = 0.5;
   }
   const a = tutorAnchor(beside);                 /* same column the writing uses */
+  tutorSpoke();
   const size = a.size;
   const x0 = a.x;
   const W = a.width, H = Math.min(520, Math.max(240, W * 0.5));
@@ -3751,6 +3816,7 @@ async function openPage(rec, {quiet = false} = {}) {
   texts.length = 0;   texts.push(...(rec.texts || []));
   aiMarks.length = 0; aiMarks.push(...(rec.aiMarks || []));
   aiLines.length = 0; aiLines.push(...(rec.aiLines || []));
+  sinceTutor = {s: 0, t: 0};                                   /* a fresh page: their whole page is "recent" */
   clearTimeout(lookTimer); lookTimer = null; lookDone = true;   /* what's already here is not an answer */
   chat.length = 0;    chat.push(...(rec.chat || []));
   history.length = 0;
@@ -4522,10 +4588,12 @@ document.getElementById('tagTodo').onclick      = () => fmt(t => prefixLines(t, 
 document.getElementById('tagStar').onclick      = () => fmt(t => prefixLines(t, ln => '★ ' + ln));
 document.getElementById('tagQ').onclick         = () => fmt(t => prefixLines(t, ln => '? ' + ln));
 
-/* the width of the page you can see, in board units: minus the sidebar and the chat panel */
-function visibleWidth() {
+/* the width of the page you can see, in board units: minus the sidebar and the chat panel.
+   The tutor asks for the width WITHOUT the panel (ignoreChat) and checks the card's real
+   rectangle itself - so it can still write beside a line that sits above the card. */
+function visibleWidth(ignoreChat = false) {
   const left = sideEl.classList.contains('open') && WIDE() ? 470 : 0;
-  const right = chatEl.classList.contains('open') && innerWidth > 900 ? Math.min(404, innerWidth) : 0;
+  const right = !ignoreChat && chatEl.classList.contains('open') && innerWidth > 900 ? Math.min(404, innerWidth) : 0;
   return Math.max(320, innerWidth - left - right - 80) / zoom;
 }
 
